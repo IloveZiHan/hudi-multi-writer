@@ -12,7 +12,7 @@ object KafkaSchema {
    * TdSQL Binlog JSON数据的Schema定义
    * 用于解析从Kafka接收到的binlog消息
    */
-  val binlogSchema: StructType = StructType(Array(
+  val tdSQLBinlogSchema: StructType = StructType(Array(
     StructField("prefix", StringType, nullable = true),           // 前缀标识
     StructField("logtype", StringType, nullable = true),          // 日志类型
     StructField("localport", IntegerType, nullable = true),       // 本地端口

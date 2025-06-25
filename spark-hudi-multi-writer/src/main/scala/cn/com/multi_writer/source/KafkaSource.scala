@@ -24,12 +24,9 @@ class KafkaSource(spark: SparkSession) {
     val conf = spark.conf
     
     // 从Spark配置中获取Kafka参数
-    val kafkaBrokers = conf.get("spark.kafka.bootstrap.servers", "localhost:9092")
-    val kafkaTopic = conf.get("spark.kafka.topic", "default-topic")
-    
-    println(s"Kafka配置信息:")
-    println(s"  Bootstrap Servers: $kafkaBrokers")
-    println(s"  Topic: $kafkaTopic")
+    val kafkaBrokers = conf.get("spark.kafka.bootstrap.servers", "10.94.162.31:9092")
+    val kafkaTopic = conf.get("spark.kafka.topic", "rtdw_tdsql_alc")
+    val startingOffsets = conf.get("spark.kafka.starting.offsets", "earliest")
     
     // 创建Kafka数据流
     spark
@@ -37,7 +34,7 @@ class KafkaSource(spark: SparkSession) {
       .format("kafka")
       .option("kafka.bootstrap.servers", kafkaBrokers)
       .option("subscribe", kafkaTopic)
-      .option("startingOffsets", "earliest") // 从最新offset开始消费
+      .option("startingOffsets", startingOffsets) // 从配置的offset位置开始消费
       .option("failOnDataLoss", "false") // 数据丢失时不失败
       .load()
   }
@@ -59,7 +56,7 @@ class KafkaSource(spark: SparkSession) {
         col("offset").as("kafka_offset"),
         col("timestamp").as("kafka_timestamp")
       )
-      .withColumn("parsed_data", from_json(col("kafka_value"), KafkaSchema.binlogSchema))
+      .withColumn("parsed_data", from_json(col("kafka_value"), KafkaSchema.tdSQLBinlogSchema))
       .select(
         col("kafka_key"),
         col("kafka_value"),

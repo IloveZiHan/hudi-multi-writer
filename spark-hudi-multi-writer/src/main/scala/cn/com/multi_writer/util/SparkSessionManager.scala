@@ -1,12 +1,25 @@
 package cn.com.multi_writer
 
 import org.apache.spark.sql.SparkSession
+import scala.collection.mutable
 
 /**
  * SparkSession管理器，用于统一管理SparkSession的创建和配置
  * 用于集中管理Spark相关的配置项，便于统一维护
  */
 object SparkSessionManager {
+
+  // 定义系统默认配置值，用于判断用户是否修改了配置
+  private val DEFAULT_CONFIGS = Map(
+    "spark.kafka.bootstrap.servers" -> "10.94.162.31:9092",
+    "spark.kafka.topic" -> "rtdw_tdsql_alc", 
+    "spark.shuffle_partition.records" -> "100000",
+    "spark.kafka.consumer.group.id" -> "hudi-cdc-consumer-group",
+    "spark.kafka.auto.offset.reset" -> "earliest",
+    "spark.kafka.starting.offsets" -> "earliest",
+    "spark.sql.streaming.trigger.processingTime" -> "5 seconds",
+    "spark.sql.streaming.checkpointLocation" -> "/tmp/spark-checkpoint"
+  )
 
   /**
    * 创建并配置SparkSession
@@ -45,6 +58,96 @@ object SparkSessionManager {
     spark.sparkContext.setLogLevel("WARN")
 
     spark
+  }
+
+  /**
+   * 获取Kafka和流处理相关的配置参数
+   * 统一管理配置参数获取，避免在各个地方重复代码
+   * 
+   * @param spark SparkSession实例
+   * @return 配置参数的Map
+   */
+  def getStreamingConfigs(spark: SparkSession): Map[String, String] = {
+    Map(
+      "kafkaBrokers" -> spark.conf.get("spark.kafka.bootstrap.servers", DEFAULT_CONFIGS("spark.kafka.bootstrap.servers")),
+      "kafkaTopic" -> spark.conf.get("spark.kafka.topic", DEFAULT_CONFIGS("spark.kafka.topic")),
+      "recordsPerPartition" -> spark.conf.get("spark.shuffle_partition.records", DEFAULT_CONFIGS("spark.shuffle_partition.records")),
+      "consumerGroupId" -> spark.conf.get("spark.kafka.consumer.group.id", DEFAULT_CONFIGS("spark.kafka.consumer.group.id")),
+      "offsetReset" -> spark.conf.get("spark.kafka.auto.offset.reset", DEFAULT_CONFIGS("spark.kafka.auto.offset.reset")),
+      "startingOffsets" -> spark.conf.get("spark.kafka.starting.offsets", DEFAULT_CONFIGS("spark.kafka.starting.offsets")),
+      "processingTime" -> spark.conf.get("spark.sql.streaming.trigger.processingTime", DEFAULT_CONFIGS("spark.sql.streaming.trigger.processingTime")),
+      "checkpointLocation" -> spark.conf.get("spark.sql.streaming.checkpointLocation", DEFAULT_CONFIGS("spark.sql.streaming.checkpointLocation"))
+    )
+  }
+
+  /**
+   * 打印用户自定义的配置参数（非默认值的配置）
+   * 只显示用户通过spark-submit或代码显式设置的配置项
+   * 
+   * @param spark SparkSession实例
+   */
+  def printCustomConfigs(spark: SparkSession): Unit = {
+    println("=== 用户自定义配置参数 ===")
+    
+    val customConfigs = mutable.ListBuffer[(String, String, String)]()
+    
+    // 检查每个默认配置项是否被用户修改
+    DEFAULT_CONFIGS.foreach { case (key, defaultValue) =>
+      try {
+        val currentValue = spark.conf.get(key, defaultValue)
+        if (currentValue != defaultValue) {
+          customConfigs += ((key, currentValue, defaultValue))
+        }
+      } catch {
+        case _: Exception => // 忽略获取配置时的异常
+      }
+    }
+    
+    // 获取所有用户设置的配置，过滤出相关的配置项
+    val allConfigs = spark.conf.getAll
+    val relevantPrefixes = Set(
+      "spark.kafka.",
+      "spark.shuffle_partition.",
+      "spark.sql.streaming.",
+      "hoodie.",
+      "spark.sql.adaptive.",
+      "spark.serializer"
+    )
+    
+    allConfigs.foreach { case (key, value) =>
+      // 如果配置项以相关前缀开头，且不在默认配置列表中，则认为是用户自定义的
+      if (relevantPrefixes.exists(prefix => key.startsWith(prefix)) && 
+          !DEFAULT_CONFIGS.contains(key)) {
+        customConfigs += ((key, value, "未设置"))
+      }
+    }
+    
+    if (customConfigs.nonEmpty) {
+      customConfigs.sortBy(_._1).foreach { case (key, currentValue, defaultValue) =>
+        println(f"  $key%-50s : $currentValue (默认值: $defaultValue)")
+      }
+    } else {
+      println("  未检测到用户自定义配置，全部使用默认值")
+    }
+    
+    println("=" * 50)
+  }
+
+  /**
+   * 打印流处理相关配置的详细信息
+   * 
+   * @param spark SparkSession实例
+   */
+  def printStreamingConfigDetails(spark: SparkSession): Unit = {
+    println("=== 流处理配置详情 ===")
+    
+    // 仅输出DEFAULT_CONFIGS中的参数
+    DEFAULT_CONFIGS.foreach { case (key, defaultValue) =>
+      val currentValue = spark.conf.get(key, defaultValue)
+      println(f"  $key: $currentValue")
+    }
+    
+    println("=" * 50)
   }
 
   /**

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- 控制台输出 -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"/>
+        </Console>
+        
+        <!-- 文件输出 -->
+        <File name="FileAppender" fileName="logs/kafka-consumer.log">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"/>
+        </File>
+    </Appenders>
+    
+    <Loggers>
+        <!-- Spark相关日志级别 -->
+        <Logger name="org.apache.spark" level="WARN"/>
+        <Logger name="org.apache.spark.sql" level="WARN"/>
+        <Logger name="org.apache.spark.streaming" level="WARN"/>
+        
+        <!-- Kafka相关日志级别 -->
+        <Logger name="org.apache.kafka" level="WARN"/>
+        <Logger name="kafka" level="WARN"/>
+        
+        <!-- Hudi相关日志级别 -->
+        <Logger name="org.apache.hudi" level="WARN"/>
+        
+        <!-- Hadoop相关日志级别 -->
+        <Logger name="org.apache.hadoop" level="WARN"/>
+        
+        <!-- 应用日志级别 -->
+        <Logger name="cn.com.multi_writer" level="INFO"/>
+        
+        <!-- 根日志级别 -->
+        <Root level="WARN">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="FileAppender"/>
+        </Root>
+    </Loggers>
+</Configuration> 
