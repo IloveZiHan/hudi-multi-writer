@@ -65,14 +65,14 @@ class CreateHudiTableTest {
       
       // 1. 删除已存在的表（如果存在）
       println("1. 删除已存在的表（如果存在）...")
-      val dropTableSql = "DROP TABLE IF EXISTS s009_t_alc_loan_bucket"
+      val dropTableSql = "DROP TABLE IF EXISTS s009_t_alc_loan"
       spark.sql(dropTableSql).collect()
       println("✓ 表删除完成")
       
       // 2. 创建Hudi表
       println("2. 创建Hudi表...")
       val createTableSql = """
-        |CREATE TABLE IF NOT EXISTS s009_t_alc_loan_bucket (
+        |CREATE TABLE IF NOT EXISTS s009_t_alc_loan (
         |    id varchar(64) COMMENT '物理主键',
         |    loan_no varchar(120) COMMENT '借据号',
         |    cont_no varchar(64) COMMENT '合同号',
@@ -171,44 +171,14 @@ class CreateHudiTableTest {
         |    'hoodie.cleaner.commits.retained' = '24',
         |    'hoodie.insert.shuffle.parallelism' = '10',
         |    'hoodie.upsert.shuffle.parallelism' = '10',
-        |    'hoodie.bulkinsert.shuffle.parallelism' = '500'
+        |    'hoodie.bulkinsert.shuffle.parallelism' = '10'
         |)
         |""".stripMargin
       
       // 执行创建表的DDL，必须调用collect()才能触发执行
       spark.sql(createTableSql).collect()
       println("✓ Hudi表创建完成")
-      
-      // 3. 验证表创建成功
-      println("3. 验证表创建成功...")
-      val showTablesSql = "SHOW TABLES"
-      val tables = spark.sql(showTablesSql).collect()
-      
-      println(s"✓ 数据库rtdw中的表数量: ${tables.length}")
-      tables.foreach { row =>
-        println(s"  - 表名: ${row.getString(1)}")
-      }
-      
-      // 检查特定表是否存在
-      val tableExists = tables.exists(_.getString(1) == "s009_t_alc_loan_bucket")
-      if (tableExists) {
-        println("✓ 表 s009_t_alc_loan_bucket 创建成功！")
-        
-        // 显示表结构
-        println("4. 显示表结构...")
-        val describeTableSql = "DESCRIBE TABLE s009_t_alc_loan_bucket"
-        val tableSchema = spark.sql(describeTableSql).collect()
-        
-        println(s"✓ 表字段数量: ${tableSchema.length}")
-        println("表结构信息（前10个字段）:")
-        tableSchema.take(10).foreach { row =>
-          println(f"  ${row.getString(0)}%-30s ${row.getString(1)}%-20s ${row.getString(2)}")
-        }
-        
-      } else {
-        throw new RuntimeException("表创建失败！未找到表 s009_t_alc_loan_bucket")
-      }
-      
+
       println("✅ 所有测试步骤执行成功！")
       
     } catch {

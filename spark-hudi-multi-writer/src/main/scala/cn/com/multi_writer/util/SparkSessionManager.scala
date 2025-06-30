@@ -18,7 +18,9 @@ object SparkSessionManager {
     "spark.kafka.auto.offset.reset" -> "earliest",
     "spark.kafka.starting.offsets" -> "earliest",
     "spark.sql.streaming.trigger.processingTime" -> "5 seconds",
-    "spark.sql.streaming.checkpointLocation" -> "/tmp/spark-checkpoint"
+    "spark.sql.streaming.checkpointLocation" -> "/tmp/spark-checkpoint",
+    "spark.meta.table.path" -> "/tmp/spark-warehouse/meta_hudi_table",
+    "spark.sql.warehouse.dir" -> "file:///tmp/spark-warehouse"
   )
 
   /**
@@ -76,7 +78,9 @@ object SparkSessionManager {
       "offsetReset" -> spark.conf.get("spark.kafka.auto.offset.reset", DEFAULT_CONFIGS("spark.kafka.auto.offset.reset")),
       "startingOffsets" -> spark.conf.get("spark.kafka.starting.offsets", DEFAULT_CONFIGS("spark.kafka.starting.offsets")),
       "processingTime" -> spark.conf.get("spark.sql.streaming.trigger.processingTime", DEFAULT_CONFIGS("spark.sql.streaming.trigger.processingTime")),
-      "checkpointLocation" -> spark.conf.get("spark.sql.streaming.checkpointLocation", DEFAULT_CONFIGS("spark.sql.streaming.checkpointLocation"))
+      "checkpointLocation" -> spark.conf.get("spark.sql.streaming.checkpointLocation", DEFAULT_CONFIGS("spark.sql.streaming.checkpointLocation")),
+      "metaTablePath" -> spark.conf.get("spark.meta.table.path", DEFAULT_CONFIGS("spark.meta.table.path")),
+      "hudiBasePath" -> spark.conf.get("spark.sql.warehouse.dir",DEFAULT_CONFIGS("spark.sql.warehouse.dir")),
     )
   }
 
