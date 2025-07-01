@@ -18,7 +18,9 @@ case class TableConfig(
                           description: Option[String] = None,
                           sourceDb: Option[String] = None,
                           sourceTable: Option[String] = None,
-                          dbType: Option[String] = None
+                          dbType: Option[String] = None,
+                          partitionExpr: Option[String] = None,
+                          hoodieConfig: Option[String] = None
                       ) {
     
     /**
@@ -66,6 +68,8 @@ case class TableConfig(
         println(s"分区类型: $partitionTypeDescription")
         println(s"源表: ${fullSourceTableName.getOrElse("N/A")}")
         println(s"数据库类型: ${dbType.getOrElse("N/A")}")
+        println(s"分区表达式: ${partitionExpr.getOrElse("N/A")}")
+        println(s"Hudi配置: ${hoodieConfig.getOrElse("N/A")}")
         println(s"标签: ${tags.getOrElse("无")}")
         println(s"描述: ${description.getOrElse("无")}")
     }

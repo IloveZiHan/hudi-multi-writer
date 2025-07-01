@@ -20,7 +20,8 @@ object SparkSessionManager {
     "spark.sql.streaming.trigger.processingTime" -> "5 seconds",
     "spark.sql.streaming.checkpointLocation" -> "/tmp/spark-checkpoint",
     "spark.meta.table.path" -> "/tmp/spark-warehouse/meta_hudi_table",
-    "spark.sql.warehouse.dir" -> "file:///tmp/spark-warehouse"
+    "spark.sql.warehouse.dir" -> "file:///tmp/spark-warehouse",
+    "spark.hive.metastore.uris" -> "thrift://huoshan-test04:9083,thrift://huoshan-test03:9083,thrift://huoshan-test05:9083"
   )
 
   /**
@@ -45,6 +46,7 @@ object SparkSessionManager {
         .config("spark.ui.enabled", "true")
         .config("spark.ui.port", "4040")
         // 禁用Hudi元数据表功能，简化配置
+        .config("spark.hive.metastore.uris", "thrift://huoshan-test04:9083,thrift://huoshan-test03:9083,thrift://huoshan-test05:9083")
         .config("hoodie.table.metadata.enable", "false")
         .config("hoodie.metadata.enable", "false")
         // 设置SQL严格模式为false，提高兼容性
@@ -81,6 +83,7 @@ object SparkSessionManager {
       "checkpointLocation" -> spark.conf.get("spark.sql.streaming.checkpointLocation", DEFAULT_CONFIGS("spark.sql.streaming.checkpointLocation")),
       "metaTablePath" -> spark.conf.get("spark.meta.table.path", DEFAULT_CONFIGS("spark.meta.table.path")),
       "hudiBasePath" -> spark.conf.get("spark.sql.warehouse.dir",DEFAULT_CONFIGS("spark.sql.warehouse.dir")),
+      "hmsServerAddress" -> spark.conf.get("spark.hive.metastore.uris",DEFAULT_CONFIGS("spark.hive.metastore.uris"))
     )
   }
 

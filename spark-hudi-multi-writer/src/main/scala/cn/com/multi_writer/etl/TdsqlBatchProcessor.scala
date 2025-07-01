@@ -3,7 +3,7 @@ package cn.com.multi_writer.etl
 import cn.com.multi_writer.meta.TableConfig
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 /**
  * TdSQL微批处理预处理器
@@ -76,7 +76,9 @@ class TdsqlBatchProcessor(spark: SparkSession) {
      * @param fieldTypeMappings 字段名到数据类型的映射列表，格式：Seq((字段名, 数据类型))
      * @return 转换后的DataFrame，仅包含指定字段和附加字段
      */
-    def extractAndConvertFields(batchDF: DataFrame, fieldTypeMappings: Seq[(String, DataType)]): DataFrame = {
+    def extractAndConvertFields(batchDF: DataFrame
+                            , fieldTypeMappings: Seq[(String, DataType)]
+                            , partitionExpr: String): DataFrame = {
 
         // 将字段列表转换为Spark表达式列表
         val fieldExpressions = fieldTypeMappings.zipWithIndex.map { case ((fieldName, dataType), index) =>
@@ -84,13 +86,12 @@ class TdsqlBatchProcessor(spark: SparkSession) {
         }.toList
 
         // 构建CDC字段表达式
-        val cdcDtExpression = when(col("create_time").isNotNull,
-            date_format(
-                date_trunc("year", to_timestamp(col("create_time"))),
-                "yyyy-MM-dd"
-            )
-        ).otherwise(date_format(date_trunc("year", current_date()), "yyyy-MM-dd"))
-            .alias("cdc_dt")
+        var cdcDtExpression: Column = null
+        if(partitionExpr.isEmpty) {
+            cdcDtExpression = expr("'default'").cast(StringType).alias("cdc_dt")
+        } else {
+            cdcDtExpression = expr(partitionExpr).cast(StringType).alias("cdc_dt")
+        }
 
         val cdcDeleteFlagExpression = when(lower(col("eventtypestr")) === "delete", lit(1))
             .otherwise(lit(0))
@@ -119,7 +120,8 @@ class TdsqlBatchProcessor(spark: SparkSession) {
     def transform(batchDF: DataFrame,
                   dbName: String,
                   tableName: String,
-                  fieldTypeMappings: Seq[(String, DataType)]): DataFrame = {
+                  fieldTypeMappings: Seq[(String, DataType)],
+                  partitionExpr: String): DataFrame = {
 
         println(s"开始转换数据 - 数据库: $dbName, 表: $tableName")
 
@@ -136,7 +138,7 @@ class TdsqlBatchProcessor(spark: SparkSession) {
         if (filteredCount > 0) {
 
             // 3. 提取字段并进行类型转换
-            val convertedDF = extractAndConvertFields(filteredDF, fieldTypeMappings)
+            val convertedDF = extractAndConvertFields(filteredDF, fieldTypeMappings, partitionExpr)
             println("步骤3: 字段提取和类型转换完成")
 
             // 检查转换结果
@@ -175,7 +177,11 @@ class TdsqlBatchProcessor(spark: SparkSession) {
     def batchTransform(batchDF: DataFrame,
                        tableConfigs: Seq[TableConfig]): Seq[DataFrame] = {
         tableConfigs.map { case tableConfig: TableConfig =>
-            transform(batchDF, tableConfig.sourceDb.getOrElse(""), tableConfig.sourceTable.getOrElse(""), tableConfig.fieldMapping)
+            transform(batchDF
+            , tableConfig.sourceDb.getOrElse("")
+            , tableConfig.sourceTable.getOrElse("")
+            , tableConfig.fieldMapping
+            , tableConfig.partitionExpr.getOrElse("trunc(create_time, 'year')"))
         }.filter(_.count() > 0) // 过滤掉空的DataFrame
     }
 
