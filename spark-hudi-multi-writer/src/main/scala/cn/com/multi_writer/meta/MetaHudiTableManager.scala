@@ -9,10 +9,16 @@ import org.apache.hudi.common.config.HoodieCommonConfig
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.net.URI
 import java.sql.{Connection, DriverManager, ResultSet}
 import java.util.Properties
+import scala.io.Source
+import com.alibaba.fastjson.JSON
+import com.alibaba.fastjson.serializer.SerializerFeature
+
+import scala.collection.JavaConverters._
 
 /**
  * Hudi表元数据管理器
@@ -39,8 +45,9 @@ import java.util.Properties
  */
 class MetaHudiTableManager(spark: SparkSession) {
 
+    private val logger: Logger = LoggerFactory.getLogger(classOf[MetaHudiTableManager])
+    
     import spark.implicits._
-
 
     /**
      * 创建元数据表的Spark SQL DDL
@@ -89,23 +96,22 @@ class MetaHudiTableManager(spark: SparkSession) {
      */
     def createMetaTable(tablePath: String): Boolean = {
         try {
-            println(s"开始创建Hudi元数据表: meta_hudi_table")
-            println(s"表路径: $tablePath")
+            logger.info(s"开始创建Hudi元数据表: meta_hudi_table")
+            logger.info(s"表路径: $tablePath")
 
             // 执行DDL创建表
             val ddl = getCreateTableDDL(tablePath)
-            println("执行DDL:")
-            println(ddl)
+            logger.info("执行DDL:")
+            logger.info(ddl)
 
             spark.sql(ddl)
 
-            println("✓ Hudi元数据表创建成功，已启用partial update支持")
+            logger.info("✓ Hudi元数据表创建成功，已启用partial update支持")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 创建Hudi元数据表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 创建Hudi元数据表失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -161,7 +167,7 @@ class MetaHudiTableManager(spark: SparkSession) {
                 )
             ).toDF()
 
-            println(s"插入元数据记录: $tableId (分区表: $isPartitioned, 分区表达式: ${Option(partitionExpr).getOrElse("N/A")}, 源库: ${Option(sourceDb).getOrElse("N/A")}, 源表: ${Option(sourceTable).getOrElse("N/A")}, 数据库类型: ${Option(dbType).getOrElse("N/A")})")
+            logger.info(s"插入元数据记录: $tableId (分区表: $isPartitioned, 分区表达式: ${Option(partitionExpr).getOrElse("N/A")}, 源库: ${Option(sourceDb).getOrElse("N/A")}, 源表: ${Option(sourceTable).getOrElse("N/A")}, 数据库类型: ${Option(dbType).getOrElse("N/A")})")
 
             // 写入Hudi表
             metaData.write
@@ -169,13 +175,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 元数据记录插入成功: $tableId")
+            logger.info(s"✓ 元数据记录插入成功: $tableId")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 插入元数据记录失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 插入元数据记录失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -196,8 +201,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"查询元数据表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"查询元数据表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -216,8 +220,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据ID查询元数据失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据ID查询元数据失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -238,7 +241,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             val existingRecord = queryTableMetaById(tableId, tablePath).collect()
 
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
@@ -269,13 +272,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 表状态更新成功: $tableId -> $newStatus")
+            logger.info(s"✓ 表状态更新成功: $tableId -> $newStatus")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表状态失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表状态失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -295,8 +297,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据状态查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据状态查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -316,8 +317,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据标签查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据标签查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -337,8 +337,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据分区类型查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据分区类型查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -358,8 +357,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据数据库类型查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据数据库类型查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -379,8 +377,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据源数据库查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据源数据库查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -407,8 +404,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据源表名称查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据源表名称查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -429,8 +425,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据源数据库和源表查询失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据源数据库和源表查询失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -446,30 +441,29 @@ class MetaHudiTableManager(spark: SparkSession) {
     def updateTableOnlineStatus(tableId: String, status: String, tablePath: String): Boolean = {
         try {
             val statusValue = status.toLowerCase.trim match {
-                case "online" => TableStatus.ONLINE
-                case "offline" => TableStatus.OFFLINE
+                case "1" => TableStatus.ONLINE
+                case "0" => TableStatus.OFFLINE
                 case _ =>
-                    println(s"✗ 无效的状态值: $status，支持的状态: online, offline")
+                    logger.error(s"✗ 无效的状态值: $status，支持的状态: online, offline")
                     return false
             }
 
             val statusText = if (statusValue == TableStatus.ONLINE) "上线" else "下线"
-            println(s"开始更新表 $tableId 状态为: $statusText")
+            logger.info(s"开始更新表 $tableId 状态为: $statusText")
 
             val result = updateTableStatus(tableId, statusValue, tablePath)
             
             if (result) {
-                println(s"✓ 表 $tableId 状态更新成功: $statusText")
+                logger.info(s"✓ 表 $tableId 状态更新成功: $statusText")
             } else {
-                println(s"✗ 表 $tableId 状态更新失败: $statusText")
+                logger.error(s"✗ 表 $tableId 状态更新失败: $statusText")
             }
 
             result
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表状态失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表状态失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -518,7 +512,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             val existingRecord = queryTableMetaById(tableId, tablePath).collect()
 
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
@@ -529,10 +523,10 @@ class MetaHudiTableManager(spark: SparkSession) {
             val updatedSourceTable = Option(sourceTable).getOrElse(record.getAs[String]("source_table"))
             val updatedDbType = Option(dbType).getOrElse(record.getAs[String]("db_type"))
 
-            println(s"更新表 $tableId 的源信息:")
-            println(s"  源数据库: ${Option(record.getAs[String]("source_db")).getOrElse("N/A")} -> ${Option(updatedSourceDb).getOrElse("N/A")}")
-            println(s"  源表名: ${Option(record.getAs[String]("source_table")).getOrElse("N/A")} -> ${Option(updatedSourceTable).getOrElse("N/A")}")
-            println(s"  数据库类型: ${Option(record.getAs[String]("db_type")).getOrElse("N/A")} -> ${Option(updatedDbType).getOrElse("N/A")}")
+            logger.info(s"更新表 $tableId 的源信息:")
+            logger.info(s"  源数据库: ${Option(record.getAs[String]("source_db")).getOrElse("N/A")} -> ${Option(updatedSourceDb).getOrElse("N/A")}")
+            logger.info(s"  源表名: ${Option(record.getAs[String]("source_table")).getOrElse("N/A")} -> ${Option(updatedSourceTable).getOrElse("N/A")}")
+            logger.info(s"  数据库类型: ${Option(record.getAs[String]("db_type")).getOrElse("N/A")} -> ${Option(updatedDbType).getOrElse("N/A")}")
 
             // 创建更新后的记录
             val updatedData = Seq(
@@ -559,13 +553,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 表源信息更新成功: $tableId")
+            logger.info(s"✓ 表源信息更新成功: $tableId")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表源信息失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表源信息失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -618,8 +611,7 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .orderBy($"update_time".desc)
         } catch {
             case e: Exception =>
-                println(s"查询所有表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"查询所有表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -635,19 +627,18 @@ class MetaHudiTableManager(spark: SparkSession) {
      */
     def queryOnlineTables(tablePath: String): DataFrame = {
         try {
-            println(s"开始查询所有已上线的Hudi表...")
+            logger.info(s"开始查询所有已上线的Hudi表...")
             
             val onlineTables = queryTablesByStatus(TableStatus.ONLINE, tablePath)
             val count = onlineTables.count()
             
-            println(s"✓ 查询完成，共找到 $count 个已上线的表")
+            logger.info(s"✓ 查询完成，共找到 $count 个已上线的表")
             
             onlineTables
 
         } catch {
             case e: Exception =>
-                println(s"✗ 查询已上线表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 查询已上线表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -679,7 +670,7 @@ class MetaHudiTableManager(spark: SparkSession) {
                                         sourceTable: String = null,
                                         dbType: String = null): Boolean = {
         try {
-            println(s"开始从Hudi表路径提取schema: $hudiTablePath")
+            logger.info(s"开始从Hudi表路径提取schema: $hudiTablePath")
 
             // 读取Hudi表获取schema
             val hudiTable = spark.read
@@ -699,15 +690,15 @@ class MetaHudiTableManager(spark: SparkSession) {
             // 创建过滤后的schema
             val filteredSchema = StructType(filteredFields)
             val schemaJson = filteredSchema.json
-            println(s"提取到的schema（已过滤Hudi和CDC列）: ${schemaJson.take(200)}...")
+            logger.info(s"提取到的schema（已过滤Hudi和CDC列）: ${schemaJson.take(200)}...")
 
             // 检测是否为分区表
             val isPartitioned = detectPartitionedTable(hudiTablePath)
-            println(s"检测到分区信息: ${if (isPartitioned) "分区表" else "非分区表"}")
+            logger.info(s"检测到分区信息: ${if (isPartitioned) "分区表" else "非分区表"}")
 
             // 从路径中提取表名作为ID
             val tableId = extractTableNameFromPath(hudiTablePath)
-            println(s"提取的表ID: $tableId")
+            logger.info(s"提取的表ID: $tableId")
 
             // 插入元数据记录
             val success = insertTableMeta(
@@ -726,17 +717,16 @@ class MetaHudiTableManager(spark: SparkSession) {
             )
 
             if (success) {
-                println(s"✓ 成功从Hudi表提取schema并插入元数据表: $tableId (分区表: $isPartitioned)")
+                logger.info(s"✓ 成功从Hudi表提取schema并插入元数据表: $tableId (分区表: $isPartitioned)")
             } else {
-                println(s"✗ 从Hudi表提取schema并插入元数据表失败: $tableId")
+                logger.error(s"✗ 从Hudi表提取schema并插入元数据表失败: $tableId")
             }
 
             success
 
         } catch {
             case e: Exception =>
-                println(s"✗ 从Hudi表提取schema失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 从Hudi表提取schema失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -769,13 +759,13 @@ class MetaHudiTableManager(spark: SparkSession) {
             }
 
             val isPartitioned = hudiBasedPartition
-            println(s"分区检测结果 -  Hudi检测: $hudiBasedPartition, 最终结果: $isPartitioned")
+            logger.info(s"分区检测结果 -  Hudi检测: $hudiBasedPartition, 最终结果: $isPartitioned")
             
             isPartitioned
 
         } catch {
             case e: Exception =>
-                println(s"检测分区表失败，默认为非分区表: ${e.getMessage}")
+                logger.error(s"检测分区表失败，默认为非分区表: ${e.getMessage}", e)
                 false
         }
     }
@@ -802,7 +792,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"从路径提取表名失败，使用默认名称: ${e.getMessage}")
+                logger.error(s"从路径提取表名失败，使用默认名称: ${e.getMessage}", e)
                 s"table_${System.currentTimeMillis()}"
         }
     }
@@ -811,9 +801,9 @@ class MetaHudiTableManager(spark: SparkSession) {
      * 打印表的DDL语句，用于调试和文档目的
      */
     def printCreateTableDDL(tablePath: String): Unit = {
-        println("=== meta_hudi_table 创建DDL ===")
-        println(getCreateTableDDL(tablePath))
-        println("================================")
+        logger.info("=== meta_hudi_table 创建DDL ===")
+        logger.info(getCreateTableDDL(tablePath))
+        logger.info("================================")
     }
 
     /**
@@ -824,7 +814,7 @@ class MetaHudiTableManager(spark: SparkSession) {
      */
     def getLatestHudiTableSchema(hudiTablePath: String): Option[StructType] = {
         try {
-            println(s"开始获取Hudi表最新schema: $hudiTablePath")
+            logger.info(s"开始获取Hudi表最新schema: $hudiTablePath")
             
             // 检查路径是否存在
             val hadoopConf = spark.sparkContext.hadoopConfiguration
@@ -832,7 +822,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             val path = new Path(hudiTablePath)
             
             if (!fs.exists(path)) {
-                println(s"✗ Hudi表路径不存在: $hudiTablePath")
+                logger.error(s"✗ Hudi表路径不存在: $hudiTablePath")
                 return None
             }
 
@@ -850,14 +840,14 @@ class MetaHudiTableManager(spark: SparkSession) {
                 schemaResolver.getTableAvroSchemaFromLatestCommit(false)
             } catch {
                 case e: Exception =>
-                    println(s"从最新commit获取schema失败，尝试其他方式: ${e.getMessage}")
+                    logger.error(s"从最新commit获取schema失败，尝试其他方式: ${e.getMessage}", e)
                     try {
                         // 如果从commit获取失败，尝试从数据文件获取
                         val schema = schemaResolver.getTableAvroSchema(false)
                         org.apache.hudi.common.util.Option.of(schema)
                     } catch {
                         case e2: Exception =>
-                            println(s"从数据文件获取schema也失败: ${e2.getMessage}")
+                            logger.error(s"从数据文件获取schema也失败: ${e2.getMessage}", e2)
                             org.apache.hudi.common.util.Option.empty()
                     }
             }
@@ -865,20 +855,20 @@ class MetaHudiTableManager(spark: SparkSession) {
             if (latestAvroSchemaOpt.isPresent) {
                 val avroSchema = latestAvroSchemaOpt.get()
                 val structType = AvroConversionUtils.convertAvroSchemaToStructType(avroSchema)
-                println(s"✓ 成功获取到Hudi表最新schema，字段数: ${structType.fields.length}")
+                logger.info(s"✓ 成功获取到Hudi表最新schema，字段数: ${structType.fields.length}")
                 Some(structType)
             } else {
-                println("✗ 无法从事务文件中获取Hudi表schema")
+                logger.error("✗ 无法从事务文件中获取Hudi表schema")
                 // 从元数据表中获取schema
                 val metaTable = spark.read.format("hudi").load(hudiTablePath)
                 val schema = metaTable.schema
-                println(s"从元数据表获取到schema，字段数: ${schema.fields.length}")
+                logger.info(s"从元数据表获取到schema，字段数: ${schema.fields.length}")
                 Some(schema)
             }
 
         } catch {
             case e: Exception =>
-                println(s"✗ 获取Hudi表最新schema失败: ${e.getMessage}")
+                logger.error(s"✗ 获取Hudi表最新schema失败: ${e.getMessage}", e)
                 e.printStackTrace()
                 None
         }
@@ -905,34 +895,34 @@ class MetaHudiTableManager(spark: SparkSession) {
                          fieldsToAdd: String, 
                          metaTablePath: String): Boolean = {
         try {
-            println(s"开始为表 $tableId 添加字段: $fieldsToAdd")
-            println(s"Hudi表路径: $hudiTablePath")
+            logger.info(s"开始为表 $tableId 添加字段: $fieldsToAdd")
+            logger.info(s"Hudi表路径: $hudiTablePath")
 
             // 1. 从Hudi表获取最新的schema
             val latestHudiSchemaOpt = getLatestHudiTableSchema(hudiTablePath)
             if (latestHudiSchemaOpt.isEmpty) {
-                println(s"✗ 无法获取Hudi表的最新schema: $hudiTablePath")
+                logger.error(s"✗ 无法获取Hudi表的最新schema: $hudiTablePath")
                 return false
             }
             val latestHudiSchema = latestHudiSchemaOpt.get
-            println(s"从Hudi表获取到最新schema，字段数: ${latestHudiSchema.fields.length}")
+            logger.info(s"从Hudi表获取到最新schema，字段数: ${latestHudiSchema.fields.length}")
 
             // 2. 查询元数据表中的现有记录
             val existingRecord = queryTableMetaById(tableId, metaTablePath).collect()
             
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
             val record = existingRecord.head
             val currentSchemaJson = record.getAs[String]("schema")
             
-            println(s"当前元数据表中的schema: ${currentSchemaJson.take(200)}...")
+            logger.info(s"当前元数据表中的schema: ${currentSchemaJson.take(200)}...")
 
             // 3. 解析要添加的字段
             val newFields = parseFieldDefinitions(fieldsToAdd)
-            println(s"解析到 ${newFields.length} 个新字段")
+            logger.info(s"解析到 ${newFields.length} 个新字段")
             
             // 4. 使用最新的Hudi表schema作为基础schema
             val baseSchema = latestHudiSchema
@@ -942,7 +932,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             val duplicateFields = newFields.filter(field => existingFieldNames.contains(field.name))
             
             if (duplicateFields.nonEmpty) {
-                println(s"✗ 检测到重复字段: ${duplicateFields.map(_.name).mkString(", ")}")
+                logger.error(s"✗ 检测到重复字段: ${duplicateFields.map(_.name).mkString(", ")}")
                 return false
             }
 
@@ -950,9 +940,9 @@ class MetaHudiTableManager(spark: SparkSession) {
             val updatedSchema = StructType(baseSchema.fields ++ newFields)
             val updatedSchemaJson = updatedSchema.json
             
-            println(s"更新后schema字段数: ${updatedSchema.fields.length}")
-            println(s"基于Hudi表最新schema: ${baseSchema.fields.length} 个字段")
-            println(s"新增字段: ${newFields.length} 个")
+            logger.info(s"更新后schema字段数: ${updatedSchema.fields.length}")
+            logger.info(s"基于Hudi表最新schema: ${baseSchema.fields.length} 个字段")
+            logger.info(s"新增字段: ${newFields.length} 个")
 
             // 6. 更新元数据记录（支持partial update）
             val currentTime = new java.sql.Timestamp(System.currentTimeMillis())
@@ -981,15 +971,14 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(metaTablePath)
 
-            println(s"✓ 成功为表 $tableId 添加 ${newFields.length} 个字段（基于Hudi表最新schema）")
-            newFields.foreach(field => println(s"  - ${field.name}: ${field.dataType}"))
+            logger.info(s"✓ 成功为表 $tableId 添加 ${newFields.length} 个字段（基于Hudi表最新schema）")
+            newFields.foreach(field => logger.info(s"  - ${field.name}: ${field.dataType}"))
             
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 为表添加字段失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 为表添加字段失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -1025,7 +1014,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             
         } catch {
             case e: Exception =>
-                println(s"解析字段定义失败: ${e.getMessage}")
+                logger.error(s"解析字段定义失败: ${e.getMessage}", e)
                 throw e
         }
     }
@@ -1080,15 +1069,15 @@ class MetaHudiTableManager(spark: SparkSession) {
             val existingRecord = queryTableMetaById(tableId, tablePath).collect()
 
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
             val record = existingRecord.head
 
-            println(s"更新表 $tableId 的分区表达式:")
-            println(s"  原分区表达式: ${Option(record.getAs[String]("partition_expr")).getOrElse("N/A")}")
-            println(s"  新分区表达式: ${Option(partitionExpr).getOrElse("N/A")}")
+            logger.info(s"更新表 $tableId 的分区表达式:")
+            logger.info(s"  原分区表达式: ${Option(record.getAs[String]("partition_expr")).getOrElse("N/A")}")
+            logger.info(s"  新分区表达式: ${Option(partitionExpr).getOrElse("N/A")}")
 
             // 创建更新后的记录
             val updatedData = Seq(
@@ -1115,13 +1104,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 表分区表达式更新成功: $tableId")
+            logger.info(s"✓ 表分区表达式更新成功: $tableId")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表分区表达式失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表分区表达式失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -1142,15 +1130,15 @@ class MetaHudiTableManager(spark: SparkSession) {
             val existingRecord = queryTableMetaById(tableId, tablePath).collect()
 
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
             val record = existingRecord.head
 
-            println(s"更新表 $tableId 的Hudi配置:")
-            println(s"  原Hudi配置: ${Option(record.getAs[String]("hoodie_config")).getOrElse("N/A")}")
-            println(s"  新Hudi配置: ${Option(hoodieConfig).map(_.take(100)).getOrElse("N/A")}...")
+            logger.info(s"更新表 $tableId 的Hudi配置:")
+            logger.info(s"  原Hudi配置: ${Option(record.getAs[String]("hoodie_config")).getOrElse("N/A")}")
+            logger.info(s"  新Hudi配置: ${Option(hoodieConfig).map(_.take(100)).getOrElse("N/A")}...")
 
             // 创建更新后的记录
             val updatedData = Seq(
@@ -1177,13 +1165,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 表Hudi配置更新成功: $tableId")
+            logger.info(s"✓ 表Hudi配置更新成功: $tableId")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表Hudi配置失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表Hudi配置失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -1205,17 +1192,17 @@ class MetaHudiTableManager(spark: SparkSession) {
             val existingRecord = queryTableMetaById(tableId, tablePath).collect()
 
             if (existingRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的记录")
                 return false
             }
 
             val record = existingRecord.head
 
-            println(s"更新表 $tableId 的分区表达式和Hudi配置:")
-            println(s"  原分区表达式: ${Option(record.getAs[String]("partition_expr")).getOrElse("N/A")}")
-            println(s"  新分区表达式: ${Option(partitionExpr).getOrElse("N/A")}")
-            println(s"  原Hudi配置: ${Option(record.getAs[String]("hoodie_config")).getOrElse("N/A")}")
-            println(s"  新Hudi配置: ${Option(hoodieConfig).map(_.take(100)).getOrElse("N/A")}...")
+            logger.info(s"更新表 $tableId 的分区表达式和Hudi配置:")
+            logger.info(s"  原分区表达式: ${Option(record.getAs[String]("partition_expr")).getOrElse("N/A")}")
+            logger.info(s"  新分区表达式: ${Option(partitionExpr).getOrElse("N/A")}")
+            logger.info(s"  原Hudi配置: ${Option(record.getAs[String]("hoodie_config")).getOrElse("N/A")}")
+            logger.info(s"  新Hudi配置: ${Option(hoodieConfig).map(_.take(100)).getOrElse("N/A")}...")
 
             // 创建更新后的记录
             val updatedData = Seq(
@@ -1242,13 +1229,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 .mode("append")
                 .save(tablePath)
 
-            println(s"✓ 表分区表达式和Hudi配置更新成功: $tableId")
+            logger.info(s"✓ 表分区表达式和Hudi配置更新成功: $tableId")
             true
 
         } catch {
             case e: Exception =>
-                println(s"✗ 更新表分区表达式和Hudi配置失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 更新表分区表达式和Hudi配置失败: ${e.getMessage}", e)
                 false
         }
     }
@@ -1268,8 +1254,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"根据分区表达式查询表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"根据分区表达式查询表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -1288,8 +1273,7 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"查询有分区表达式的表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"查询有分区表达式的表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
         }
     }
@@ -1308,9 +1292,123 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         } catch {
             case e: Exception =>
-                println(s"查询有Hudi配置的表列表失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"查询有Hudi配置的表列表失败: ${e.getMessage}", e)
                 spark.emptyDataFrame
+        }
+    }
+
+    /**
+     * 从resources目录加载Hudi默认配置
+     *
+     * @return 默认配置的Map，如果加载失败则返回空Map
+     */
+    private def loadHoodieDefaultConfig(): Map[String, String] = {
+        try {
+            // 从classpath加载配置文件
+            val configStream = getClass.getResourceAsStream("/hoodie-default.json")
+            if (configStream != null) {
+                val source = Source.fromInputStream(configStream)
+                val configContent = source.mkString
+                source.close()
+                
+                // 解析JSON配置
+                val configMap = JSON.parseObject(configContent).asScala.toMap.map {
+                    case (k, v) => k -> v.toString
+                }
+                
+                logger.info(s"✓ 成功加载Hudi默认配置，配置项数量: ${configMap.size}")
+                configMap
+            } else {
+                logger.error("✗ 无法找到hoodie-default.json配置文件")
+                Map.empty[String, String]
+            }
+        } catch {
+            case e: Exception =>
+                logger.error(s"✗ 加载Hudi默认配置失败: ${e.getMessage}", e)
+                Map.empty[String, String]
+        }
+    }
+
+    /**
+     * 替换配置模板中的变量
+     *
+     * @param configMap 配置Map
+     * @param variables 变量替换Map
+     * @return 替换后的配置Map
+     */
+    private def replaceConfigVariables(configMap: Map[String, String], variables: Map[String, String]): Map[String, String] = {
+        configMap.map { case (key, value) =>
+            var replacedValue = value
+            variables.foreach { case (varName, varValue) =>
+                replacedValue = replacedValue.replace(s"$${$varName}", varValue)
+            }
+            key -> replacedValue
+        }
+    }
+
+    /**
+     * 生成Hudi配置JSON字符串
+     *
+     * @param primaryKey        主键字段名
+     * @param hmsServerAddress  HMS服务器地址
+     * @return Hudi配置JSON字符串
+     */
+    private def generateHoodieConfig(primaryKey: String, hmsServerAddress: String): String = {
+        try {
+            // 加载默认配置
+            val defaultConfig = loadHoodieDefaultConfig()
+            
+            if (defaultConfig.isEmpty) {
+                logger.error("✗ 使用硬编码的默认配置")
+                // 如果加载失败，返回硬编码的默认配置
+                return s"""
+                {
+                    "hoodie.datasource.write.table.type": "COPY_ON_WRITE",
+                    "hoodie.table.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator",
+                    "hoodie.table.recordkey.fields": "$primaryKey",
+                    "hoodie.datasource.write.operation": "upsert",
+                    "hoodie.datasource.insert.dup.policy": "insert",
+                    "hoodie.datasource.meta.sync.enable": "true",
+                    "hoodie.datasource.meta_sync.condition.sync": "true",
+                    "hoodie.datasource.hive_sync.enable": "true",
+                    "hoodie.datasource.hive_sync.mode": "hms",
+                    "hoodie.datasource.hive_sync.metastore.uris": "$hmsServerAddress",
+                    "hoodie.datasource.write.precombine.field": "update_time",
+                    "hoodie.datasource.write.partitionpath.field": "cdc_dt",
+                    "hoodie.datasource.write.hive_style_partitioning": "true",
+                    "hoodie.index.type": "BUCKET",
+                    "hoodie.bucket.index.hash.field": "id",
+                    "hoodie.index.bucket.engine": "SIMPLE",
+                    "hoodie.bucket.index.num.buckets": "20",
+                    "hoodie.cleaner.commits.retained": "24",
+                    "hoodie.insert.shuffle.parallelism": "10",
+                    "hoodie.upsert.shuffle.parallelism": "10",
+                    "hoodie.bulkinsert.shuffle.parallelism": "500"
+                }
+                """
+            }
+            
+            // 定义变量替换
+            val variables = Map(
+                "primaryKey" -> primaryKey,
+                "hmsServerAddress" -> hmsServerAddress
+            )
+            
+            // 替换配置中的变量
+            val finalConfig = replaceConfigVariables(defaultConfig, variables)
+            
+            // 转换为JSON字符串
+            val jsonConfig = JSON.toJSONString(finalConfig.asJava, SerializerFeature.DisableCircularReferenceDetect)
+            
+            logger.info(s"✓ 成功生成Hudi配置，主键: $primaryKey")
+            logger.info(s"  HMS地址: $hmsServerAddress")
+            
+            jsonConfig
+            
+        } catch {
+            case e: Exception =>
+                logger.error(s"✗ 生成Hudi配置失败: ${e.getMessage}", e)
+                "{}"
         }
     }
 
@@ -1353,10 +1451,10 @@ class MetaHudiTableManager(spark: SparkSession) {
 
         var connection: Connection = null
         try {
-            println(s"开始从TDSQL表获取schema并插入元数据表:")
-            println(s"  TDSQL URL: $tdsqlUrl")
-            println(s"  源数据库: $tdsqlDatabase")
-            println(s"  源表名: $tdsqlTable")
+            logger.info(s"开始从TDSQL表获取schema并插入元数据表:")
+            logger.info(s"  TDSQL URL: $tdsqlUrl")
+            logger.info(s"  源数据库: $tdsqlDatabase")
+            logger.info(s"  源表名: $tdsqlTable")
             
             // 获取HMS地址
             val hmsServerAddress = spark.conf.get("spark.hive.metastore.uris")
@@ -1376,47 +1474,24 @@ class MetaHudiTableManager(spark: SparkSession) {
             val tdsqlSchemaOpt = getTdsqlTableSchema(connection, tdsqlDatabase, tdsqlTable)
             
             if (tdsqlSchemaOpt.isEmpty) {
-                println(s"✗ 无法获取TDSQL表schema: $tdsqlDatabase.$tdsqlTable")
+                logger.error(s"✗ 无法获取TDSQL表schema: $tdsqlDatabase.$tdsqlTable")
                 return false
             }
 
             val tdsqlSchema = tdsqlSchemaOpt.get
-            println(s"✓ 成功获取TDSQL表schema，字段数: ${tdsqlSchema.fields.length}")
+            logger.info(s"✓ 成功获取TDSQL表schema，字段数: ${tdsqlSchema.fields.length}")
 
             // 转换schema为JSON
             val schemaJson = tdsqlSchema.json
-            println(s"生成的schema JSON: ${schemaJson.take(200)}...")
+            logger.info(s"生成的schema JSON: ${schemaJson.take(200)}...")
 
             // 使用表名作为ID（如果没有指定tableId）
             val finalTableId = Option(tableId).getOrElse(s"${tdsqlDatabase}_${tdsqlTable}")
             
             val primaryKey = getTdsqlTablePrimaryKey(connection, tdsqlDatabase, tdsqlTable)
 
-            val hoodieConfig = s"""
-                {
-                    'hoodie.datasource.write.table.type':'COPY_ON_WRITE',
-                    'hoodie.datasource.write.keygenerator.class':'org.apache.hudi.keygen.SimpleKeyGenerator',
-                    'hoodie.table.recordkey.fields':'${primaryKey}',
-                    'hoodie.datasource.write.operation':'upsert',
-                    'hoodie.datasource.insert.dup.policy':'insert',
-                    'hoodie.datasource.meta.sync.enable':'true',
-                    'hoodie.datasource.meta_sync.condition.sync':'true',
-                    'hoodie.datasource.hive_sync.enable':'true',
-                    'hoodie.datasource.hive_sync.mode':'hms',
-                    'hoodie.datasource.hive_sync.metastore.uris':'${hmsServerAddress}',
-                    'hoodie.datasource.write.precombine.field':'update_time',
-                    'hoodie.datasource.write.partitionpath.field':'cdc_dt',
-                    'hoodie.datasource.write.hive_style_partitioning':'true',
-                    'hoodie.index.type':'BUCKET',
-                    'hoodie.bucket.index.hash.field':'id',
-                    'hoodie.index.bucket.engine':'SIMPLE',
-                    'hoodie.bucket.index.num.buckets':'20',
-                    'hoodie.cleaner.commits.retained':'24',
-                    'hoodie.insert.shuffle.parallelism':'10',
-                    'hoodie.upsert.shuffle.parallelism':'10',
-                    'hoodie.bulkinsert.shuffle.parallelism':'500'
-                }
-            """
+            // 使用新的配置生成方法，从JSON文件加载配置
+            val hoodieConfig = generateHoodieConfig(primaryKey, hmsServerAddress)
 
             // 插入元数据记录
             val success = insertTableMeta(
@@ -1435,19 +1510,18 @@ class MetaHudiTableManager(spark: SparkSession) {
             )
 
             if (success) {
-                println(s"✓ 成功从TDSQL表创建元数据记录: $finalTableId")
-                println(s"  源库表: $tdsqlDatabase.$tdsqlTable")
-                println(s"  字段数: ${tdsqlSchema.fields.length}")
-                println(s"  分区表: $isPartitioned")
+                logger.info(s"✓ 成功从TDSQL表创建元数据记录: $finalTableId")
+                logger.info(s"  源库表: $tdsqlDatabase.$tdsqlTable")
+                logger.info(s"  字段数: ${tdsqlSchema.fields.length}")
+                logger.info(s"  分区表: $isPartitioned")
             } else {
-                println(s"✗ 从TDSQL表创建元数据记录失败: $finalTableId")
+                logger.error(s"✗ 从TDSQL表创建元数据记录失败: $finalTableId")
             }
 
             success
         } catch {
             case e: Exception =>
-                println(s"✗ 从TDSQL表插入元数据记录失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 从TDSQL表插入元数据记录失败: ${e.getMessage}", e)
                 false
         } finally {
             if (connection != null) connection.close()
@@ -1486,7 +1560,7 @@ class MetaHudiTableManager(spark: SparkSession) {
         var resultSet: ResultSet = null
         
         try {   
-            println(s"连接TDSQL数据库获取表schema: $database.$table")
+            logger.info(s"连接TDSQL数据库获取表schema: $database.$table")
             
             // 查询表结构信息
             val sql = s"""
@@ -1534,22 +1608,21 @@ class MetaHudiTableManager(spark: SparkSession) {
                 val field = StructField(columnName, sparkDataType, isNullable, metadata)
                 fields += field
                 
-                println(s"  字段: $columnName, TDSQL类型: $dataType -> Spark类型: $sparkDataType, 可空: $isNullable")
+                logger.info(s"  字段: $columnName, TDSQL类型: $dataType -> Spark类型: $sparkDataType, 可空: $isNullable")
             }
             
             if (fields.nonEmpty) {
                 val schema = StructType(fields.toArray)
-                println(s"✓ 成功解析TDSQL表schema，共 ${fields.length} 个字段")
+                logger.info(s"✓ 成功解析TDSQL表schema，共 ${fields.length} 个字段")
                 Some(schema)
             } else {
-                println(s"✗ 未找到表字段信息: $database.$table")
+                logger.error(s"✗ 未找到表字段信息: $database.$table")
                 None
             }
             
         } catch {
             case e: Exception =>
-                println(s"✗ 获取TDSQL表schema失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 获取TDSQL表schema失败: ${e.getMessage}", e)
                 None
         } 
     }
@@ -1613,7 +1686,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             
             // 其他未知类型默认为字符串
             case _ => 
-                println(s"警告: 未知的TDSQL数据类型 '$tdsqlDataType'，映射为StringType")
+                logger.warn(s"警告: 未知的TDSQL数据类型 '$tdsqlDataType'，映射为StringType")
                 StringType
         }
     }
@@ -1635,13 +1708,13 @@ class MetaHudiTableManager(spark: SparkSession) {
      */
     def generateHudiTableDDL(tableId: String, tablePath: String, metaTablePath: String): Option[String] = {
         try {
-            println(s"开始为表 $tableId 生成Hudi表DDL...")
+            logger.info(s"开始为表 $tableId 生成Hudi表DDL...")
 
             // 1. 查询表的元数据信息
             val metaRecord = queryTableMetaById(tableId, metaTablePath).collect()
             
             if (metaRecord.isEmpty) {
-                println(s"✗ 未找到表ID为 $tableId 的元数据记录")
+                logger.error(s"✗ 未找到表ID为 $tableId 的元数据记录")
                 return None
             }
 
@@ -1655,21 +1728,21 @@ class MetaHudiTableManager(spark: SparkSession) {
             val sourceTable = Option(record.getAs[String]("source_table"))
             val dbType = Option(record.getAs[String]("db_type"))
 
-            println(s"✓ 成功获取表元数据: $tableId")
-            println(s"  分区表: $isPartitioned")
-            println(s"  源库表: ${sourceDb.getOrElse("N/A")}.${sourceTable.getOrElse("N/A")}")
-            println(s"  数据库类型: ${dbType.getOrElse("N/A")}")
+            logger.info(s"✓ 成功获取表元数据: $tableId")
+            logger.info(s"  分区表: $isPartitioned")
+            logger.info(s"  源库表: ${sourceDb.getOrElse("N/A")}.${sourceTable.getOrElse("N/A")}")
+            logger.info(s"  数据库类型: ${dbType.getOrElse("N/A")}")
 
             // 2. 解析schema JSON为StructType
             val schema = try {
                 DataType.fromJson(schemaJson).asInstanceOf[StructType]
             } catch {
                 case e: Exception =>
-                    println(s"✗ 解析schema JSON失败: ${e.getMessage}")
+                    logger.error(s"✗ 解析schema JSON失败: ${e.getMessage}", e)
                     return None
             }
 
-            println(s"✓ 成功解析schema，字段数: ${schema.fields.length}")
+            logger.info(s"✓ 成功解析schema，字段数: ${schema.fields.length}")
 
             // 3. 生成DDL语句
             val ddl = buildHudiTableDDL(
@@ -1682,13 +1755,12 @@ class MetaHudiTableManager(spark: SparkSession) {
                 description = description
             )
 
-            println(s"✓ 成功生成Hudi表DDL: $tableId")
+            logger.info(s"✓ 成功生成Hudi表DDL: $tableId")
             Some(ddl)
 
         } catch {
             case e: Exception =>
-                println(s"✗ 生成Hudi表DDL失败: ${e.getMessage}")
-                e.printStackTrace()
+                logger.error(s"✗ 生成Hudi表DDL失败: ${e.getMessage}", e)
                 None
         }
     }
@@ -1870,28 +1942,27 @@ class MetaHudiTableManager(spark: SparkSession) {
      * @param tableId       表ID
      * @param tablePath     目标表的存储路径
      * @param metaTablePath 元数据表路径                                                                                                                                             
-     * @return 是否成功生成DDL
+     * @return DDL语句字符串，失败时返回空字符串
      */
-    def generateAndPrintHudiTableDDL(tableId: String, tablePath: String, metaTablePath: String): Boolean = {
+    def generateAndPrintHudiTableDDL(tableId: String, tablePath: String, metaTablePath: String): String = {
         try {
             val ddlOpt = generateHudiTableDDL(tableId, tablePath, metaTablePath)
             
             ddlOpt match {
                 case Some(ddl) =>
-                    println(s"\n=== Hudi表 $tableId 的DDL语句 ===")
-                    println(ddl)
-                    println("=" * 50)
-                    true
+                    logger.info(s"\n=== Hudi表 $tableId 的DDL语句 ===")
+                    logger.info(ddl)
+                    logger.info("=" * 50)
+                    ddl
                 case None =>
-                    println(s"✗ 无法生成表 $tableId 的DDL语句")
-                    false
+                    logger.error(s"✗ 无法生成表 $tableId 的DDL语句")
+                    ""
             }
             
         } catch {
             case e: Exception =>
-                println(s"✗ 生成并打印DDL失败: ${e.getMessage}")
-                e.printStackTrace()
-                false
+                logger.error(s"✗ 生成并打印DDL失败: ${e.getMessage}", e)
+                ""
         }
     }
 }

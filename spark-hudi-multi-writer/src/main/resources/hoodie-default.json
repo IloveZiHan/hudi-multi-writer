@@ -1,0 +1,23 @@
+{
+  "hoodie.datasource.write.table.type": "COPY_ON_WRITE",
+  "hoodie.table.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator",
+  "hoodie.table.recordkey.fields": "${primaryKey}",
+  "hoodie.datasource.write.operation": "upsert",
+  "hoodie.datasource.insert.dup.policy": "insert",
+  "hoodie.datasource.meta.sync.enable": "false",
+  "hoodie.datasource.meta_sync.condition.sync": "true",
+  "hoodie.datasource.hive_sync.enable": "false",
+  "hoodie.datasource.hive_sync.mode": "hms",
+  "hoodie.datasource.hive_sync.metastore.uris": "${hmsServerAddress}",
+  "hoodie.datasource.write.precombine.field": "update_time",
+  "hoodie.datasource.write.partitionpath.field": "cdc_dt",
+  "hoodie.datasource.write.hive_style_partitioning": "true",
+  "hoodie.index.type": "BUCKET",
+  "hoodie.bucket.index.hash.field": "id",
+  "hoodie.index.bucket.engine": "SIMPLE",
+  "hoodie.bucket.index.num.buckets": "20",
+  "hoodie.cleaner.commits.retained": "24",
+  "hoodie.insert.shuffle.parallelism": "10",
+  "hoodie.upsert.shuffle.parallelism": "10",
+  "hoodie.bulkinsert.shuffle.parallelism": "500"
+}

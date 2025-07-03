@@ -4,6 +4,7 @@ import cn.com.multi_writer.meta.TableConfig
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.slf4j.{Logger, LoggerFactory}
 
 /**
  * TdSQL微批处理预处理器
@@ -17,6 +18,8 @@ import org.apache.spark.sql.{Column, DataFrame, SparkSession}
  */
 class TdsqlBatchProcessor(spark: SparkSession) {
 
+    private val logger: Logger = LoggerFactory.getLogger(classOf[TdsqlBatchProcessor])
+    
     // 导入隐式转换
 
     /**
@@ -135,38 +138,38 @@ class TdsqlBatchProcessor(spark: SparkSession) {
                   fieldTypeMappings: Seq[(String, DataType)],
                   partitionExpr: String): DataFrame = {
 
-        println(s"开始转换数据 - 数据库: $dbName, 表: $tableName")
+        logger.info(s"开始转换数据 - 数据库: $dbName, 表: $tableName")
 
         // 1. 根据事件类型处理数据字段
         val processedDF = processDataFieldsByEventType(batchDF)
-        println("步骤1: 事件类型数据字段处理完成")
+        logger.info("步骤1: 事件类型数据字段处理完成")
 
         // 2. 过滤指定数据库和表名的数据
         val filteredDF = filterByDatabaseAndTable(processedDF, dbName, tableName)
         filteredDF.show
         val filteredCount = filteredDF.count()
-        println(s"步骤2: 数据库和表名过滤完成，过滤后数据量: $filteredCount 条")
+        logger.info(s"步骤2: 数据库和表名过滤完成，过滤后数据量: $filteredCount 条")
 
         if (filteredCount > 0) {
 
             // 3. 提取字段并进行类型转换
             val convertedDF = extractAndConvertFields(filteredDF, fieldTypeMappings, partitionExpr)
-            println("步骤3: 字段提取和类型转换完成")
+            logger.info("步骤3: 字段提取和类型转换完成")
 
             // 检查转换结果
             val finalCount = convertedDF.count()
-            println(s"数据转换完成 - 最终数据量: $finalCount 条")
+            logger.info(s"数据转换完成 - 最终数据量: $finalCount 条")
 
             if (finalCount > 0) {
-                println("转换后的数据样例:")
+                logger.info("转换后的数据样例:")
                 convertedDF.show(3, truncate = false)
             } else {
-                println("警告: 字段提取后数据为空，可能存在字段匹配问题")
+                logger.info("警告: 字段提取后数据为空，可能存在字段匹配问题")
             }
 
             convertedDF
         } else {
-            println("没有匹配的数据需要转换")
+            logger.info("没有匹配的数据需要转换")
             // 返回空的DataFrame，仅包含指定字段和附加字段的schema结构
             val emptySchema = StructType(
                 fieldTypeMappings.map { case (fieldName, dataType) => StructField(fieldName, dataType, nullable = true) } ++

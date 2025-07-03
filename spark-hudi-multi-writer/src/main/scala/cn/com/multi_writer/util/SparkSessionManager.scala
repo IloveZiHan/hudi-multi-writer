@@ -2,12 +2,16 @@ package cn.com.multi_writer
 
 import org.apache.spark.sql.SparkSession
 import scala.collection.mutable
+import org.slf4j.{Logger, LoggerFactory}
 
 /**
  * SparkSession管理器，用于统一管理SparkSession的创建和配置
  * 用于集中管理Spark相关的配置项，便于统一维护
  */
 object SparkSessionManager {
+
+  // 创建logger实例
+  private val logger: Logger = LoggerFactory.getLogger(SparkSessionManager.getClass)
 
   // 定义系统默认配置值，用于判断用户是否修改了配置
   private val DEFAULT_CONFIGS = Map(
@@ -94,7 +98,7 @@ object SparkSessionManager {
    * @param spark SparkSession实例
    */
   def printCustomConfigs(spark: SparkSession): Unit = {
-    println("=== 用户自定义配置参数 ===")
+    logger.info("=== 用户自定义配置参数 ===")
     
     val customConfigs = mutable.ListBuffer[(String, String, String)]()
     
@@ -131,13 +135,13 @@ object SparkSessionManager {
     
     if (customConfigs.nonEmpty) {
       customConfigs.sortBy(_._1).foreach { case (key, currentValue, defaultValue) =>
-        println(f"  $key%-50s : $currentValue (默认值: $defaultValue)")
+        logger.info(f"  $key%-50s : $currentValue (默认值: $defaultValue)")
       }
     } else {
-      println("  未检测到用户自定义配置，全部使用默认值")
+      logger.info("  未检测到用户自定义配置，全部使用默认值")
     }
     
-    println("=" * 50)
+    logger.info("=" * 50)
   }
 
   /**
@@ -146,15 +150,15 @@ object SparkSessionManager {
    * @param spark SparkSession实例
    */
   def printStreamingConfigDetails(spark: SparkSession): Unit = {
-    println("=== 流处理配置详情 ===")
+    logger.info("=== 流处理配置详情 ===")
     
     // 仅输出DEFAULT_CONFIGS中的参数
     DEFAULT_CONFIGS.foreach { case (key, defaultValue) =>
       val currentValue = spark.conf.get(key, defaultValue)
-      println(f"  $key: $currentValue")
+      logger.info(f"  $key: $currentValue")
     }
     
-    println("=" * 50)
+    logger.info("=" * 50)
   }
 
   /**
