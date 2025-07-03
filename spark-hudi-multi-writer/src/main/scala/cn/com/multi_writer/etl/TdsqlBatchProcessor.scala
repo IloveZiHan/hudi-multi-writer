@@ -69,6 +69,28 @@ class TdsqlBatchProcessor(spark: SparkSession) {
     }
 
     /**
+     * 构建CDC字段表达式
+     * 
+     * @param partitionExpr 分区表达式，为空时使用默认值
+     * @return CDC字段表达式序列，包含 cdc_dt 和 cdc_delete_flag
+     */
+    def buildCdcFields(partitionExpr: String): Seq[Column] = {
+        // 构建 cdc_dt 字段表达式
+        val cdcDtExpression = if (partitionExpr.isEmpty) {
+            expr("'default'").cast(StringType).alias("cdc_dt")
+        } else {
+            expr(partitionExpr).cast(StringType).alias("cdc_dt")
+        }
+        
+        // 构建 cdc_delete_flag 字段表达式
+        val cdcDeleteFlagExpression = when(lower(col("eventtypestr")) === "delete", lit(1))
+            .otherwise(lit(0))
+            .alias("cdc_delete_flag")
+        
+        Seq(cdcDtExpression, cdcDeleteFlagExpression)
+    }
+
+    /**
      * 获取所有待写入Hudi的字段并进行类型转换
      * 优化后仅包含fieldTypeMappings中的字段以及cdc_dt、cdc_delete_flag两个附加字段
      *
@@ -86,20 +108,10 @@ class TdsqlBatchProcessor(spark: SparkSession) {
         }.toList
 
         // 构建CDC字段表达式
-        var cdcDtExpression: Column = null
-        if(partitionExpr.isEmpty) {
-            cdcDtExpression = expr("'default'").cast(StringType).alias("cdc_dt")
-        } else {
-            cdcDtExpression = expr(partitionExpr).cast(StringType).alias("cdc_dt")
-        }
+        val cdcFieldExpressions = buildCdcFields(partitionExpr)
 
-        val cdcDeleteFlagExpression = when(lower(col("eventtypestr")) === "delete", lit(1))
-            .otherwise(lit(0))
-            .alias("cdc_delete_flag")
-
-        
         // 添加CDC字段
-        val allExpressions = fieldExpressions ++ Seq(cdcDtExpression, cdcDeleteFlagExpression)
+        val allExpressions = fieldExpressions ++ cdcFieldExpressions
 
         val frame = batchDF.select(allExpressions: _*)
         frame.show
@@ -184,60 +196,6 @@ class TdsqlBatchProcessor(spark: SparkSession) {
             , tableConfig.partitionExpr.getOrElse("trunc(create_time, 'year')"))
         }.filter(_.count() > 0) // 过滤掉空的DataFrame
     }
-
-    /**
-     * 调试方法：检查数据结构和字段匹配情况
-     *
-     * @param batchDF 输入的DataFrame
-     * @param targetFields 目标字段列表
-     */
-    def debugDataStructure(batchDF: DataFrame, targetFields: Seq[String] = Seq()): Unit = {
-        println("=== 数据结构调试信息 ===")
-
-        // 显示DataFrame的schema
-        println("DataFrame Schema:")
-        batchDF.printSchema()
-
-        // 显示前几行数据
-        println("前3行数据:")
-        batchDF.show(3, truncate = false)
-
-        // 检查特定字段的数据
-        if (batchDF.columns.contains("data_fields") && batchDF.columns.contains("column")) {
-            println("data_fields和column字段的详细信息:")
-            batchDF.select("data_fields", "column").show(3, truncate = false)
-
-            // 检查字段匹配情况
-            if (targetFields.nonEmpty) {
-                println(s"目标字段: ${targetFields.mkString(", ")}")
-
-                // 创建调试UDF来检查字段匹配
-                val debugUDF = udf((dataFields: Seq[String], columnNames: Seq[String]) => {
-                    if (dataFields != null && columnNames != null) {
-                        val info = Map(
-                            "data_fields_count" -> dataFields.length,
-                            "column_names_count" -> columnNames.length,
-                            "column_names" -> columnNames.mkString("[", ", ", "]"),
-                            "data_fields_sample" -> dataFields.take(5).mkString("[", ", ", "]")
-                        )
-                        info.toString
-                    } else {
-                        "data_fields or column_names is null"
-                    }
-                })
-
-                val debugDF = batchDF.withColumn("debug_info",
-                    debugUDF(col("data_fields"), col("column")))
-
-                println("字段匹配调试信息:")
-                debugDF.select("debug_info").show(3, truncate = false)
-            }
-        } else {
-            println("缺少必要的字段: data_fields 或 column")
-        }
-
-        println("=== 调试信息结束 ===")
-    }
 }
 
 /**
@@ -253,38 +211,5 @@ object TdsqlBatchProcessor {
      */
     def apply(spark: SparkSession): TdsqlBatchProcessor = {
         new TdsqlBatchProcessor(spark)
-    }
-
-    /**
-     * 常用数据类型映射工具方法
-     *
-     * @param fieldName 字段名
-     * @param typeName 类型名称字符串（如："string", "int", "long", "double", "boolean", "timestamp", "date"）
-     * @return 字段名和DataType的元组
-     */
-    def createFieldMapping(fieldName: String, typeName: String): (String, DataType) = {
-        val dataType = typeName.toLowerCase match {
-            case "string" | "varchar" | "text" => StringType
-            case "int" | "integer" => IntegerType
-            case "long" | "bigint" => LongType
-            case "double" | "decimal" | "float" => DoubleType
-            case "boolean" | "bool" => BooleanType
-            case "timestamp" | "datetime" => TimestampType
-            case "date" => DateType
-            case _ => StringType // 默认为字符串类型
-        }
-        (fieldName, dataType)
-    }
-
-    /**
-     * 批量创建字段映射
-     *
-     * @param fieldTypePairs 字段名和类型名的对列表
-     * @return 字段映射列表
-     */
-    def createFieldMappings(fieldTypePairs: (String, String)*): Seq[(String, DataType)] = {
-        fieldTypePairs.map { case (fieldName, typeName) =>
-            createFieldMapping(fieldName, typeName)
-        }
     }
 }
