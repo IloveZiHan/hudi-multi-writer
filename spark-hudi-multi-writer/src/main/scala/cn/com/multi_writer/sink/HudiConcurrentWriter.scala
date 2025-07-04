@@ -140,7 +140,7 @@ class WriteTaskExecutor(spark: SparkSession) {
             val writer = task.batchDF
                 .write
                 .format("hudi")
-                .option("hoodie.table.name", task.hudiTableName)
+                .options(task.options)
                 .mode("append")
 
             // 应用额外的配置选项

@@ -12,10 +12,9 @@
 
     <name>Hudi Multi Writer Parent</name>
     <description>Kafka数据通过Structured Streaming写入Hudi的多模块项目</description>
-
-    <!-- 子模块列表 -->
     <modules>
-        <module>spark-hudi-multi-writer</module>
+        <module>hudi-meta-service</module>
+        <module>hudi-meta-web</module>
     </modules>
 
     <!-- 版本属性管理 -->
@@ -37,7 +36,7 @@
         <fastjson.version>1.2.83</fastjson.version>
         <mysql.version>8.0.33</mysql.version>
         <log4j.version>2.20.0</log4j.version>
-        <slf4j.version>1.7.36</slf4j.version>
+        <slf4j.version>2.0.7</slf4j.version>
         
         <!-- 测试依赖版本 -->
         <junit.version>4.13.2</junit.version>

@@ -69,14 +69,7 @@ object TdsqlCdcStreamJob {
             val query = parsedStream.writeStream
                 .outputMode("append")
                 .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
-                    processBatch(batchDF.sparkSession
-                        , batchDF
-                        , batchId
-                        , hudiWriter
-                        , batchProcessor
-                        , dataCleaner
-                        , metaManager
-                        , concurrentWriterConfig)
+                    processBatch(batchDF.sparkSession, batchDF, batchId, batchProcessor, dataCleaner, metaManager, concurrentWriterConfig)
                 }
                 .trigger(org.apache.spark.sql.streaming.Trigger.ProcessingTime("5 seconds"))
                 .start()
@@ -99,7 +92,6 @@ object TdsqlCdcStreamJob {
     def processBatch(spark: SparkSession
                      , batchDF: DataFrame
                      , batchId: Long
-                     , hudiWriter: HudiWriter
                      , batchProcessor: TdsqlBatchProcessor
                      , dataCleaner: DataCleaner
                      , metaManager: MetaHudiTableManager

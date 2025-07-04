@@ -133,18 +133,7 @@ class MetaHudiTableManager(spark: SparkSession) {
      * @param tablePath   元数据表路径
      * @return 是否操作成功
      */
-    def insertTableMeta(tableId: String,
-                        schemaJson: String,
-                        status: Int,
-                        isPartitioned: Boolean,
-                        partitionExpr: String = null,
-                        hoodieConfig: String = null,
-                        tags: String = null,
-                        description: String = null,
-                        sourceDb: String = null,
-                        sourceTable: String = null,
-                        dbType: String = null,
-                        tablePath: String): Boolean = {
+    def insertTableMeta(tableId: String, schemaJson: String, status: Int, partitionExpr: String = null, hoodieConfig: String = null, tags: String = null, description: String = null, sourceDb: String = null, sourceTable: String = null, dbType: String = null, tablePath: String): Boolean = {
         try {
             val currentTime = new java.sql.Timestamp(System.currentTimeMillis())
 
@@ -154,7 +143,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = schemaJson,
                     status = status,
-                    is_partitioned = isPartitioned,
                     partition_expr = Option(partitionExpr),
                     hoodie_config = Option(hoodieConfig),
                     tags = Option(tags),
@@ -167,7 +155,7 @@ class MetaHudiTableManager(spark: SparkSession) {
                 )
             ).toDF()
 
-            logger.info(s"插入元数据记录: $tableId (分区表: $isPartitioned, 分区表达式: ${Option(partitionExpr).getOrElse("N/A")}, 源库: ${Option(sourceDb).getOrElse("N/A")}, 源表: ${Option(sourceTable).getOrElse("N/A")}, 数据库类型: ${Option(dbType).getOrElse("N/A")})")
+            logger.info(s"插入元数据记录: $tableId (分区表达式: ${Option(partitionExpr).getOrElse("N/A")}, 源库: ${Option(sourceDb).getOrElse("N/A")}, 源表: ${Option(sourceTable).getOrElse("N/A")}, 数据库类型: ${Option(dbType).getOrElse("N/A")})")
 
             // 写入Hudi表
             metaData.write
@@ -253,7 +241,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = record.getAs[String]("schema"),
                     status = newStatus,
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(record.getAs[String]("partition_expr")),
                     hoodie_config = Option(record.getAs[String]("hoodie_config")),
                     tags = Option(record.getAs[String]("tags")),
@@ -441,8 +428,8 @@ class MetaHudiTableManager(spark: SparkSession) {
     def updateTableOnlineStatus(tableId: String, status: String, tablePath: String): Boolean = {
         try {
             val statusValue = status.toLowerCase.trim match {
-                case "1" => TableStatus.ONLINE
-                case "0" => TableStatus.OFFLINE
+                case "online" => TableStatus.ONLINE
+                case "offline" => TableStatus.OFFLINE
                 case _ =>
                     logger.error(s"✗ 无效的状态值: $status，支持的状态: online, offline")
                     return false
@@ -534,7 +521,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = record.getAs[String]("schema"),
                     status = record.getAs[Int]("status"),
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(record.getAs[String]("partition_expr")),
                     hoodie_config = Option(record.getAs[String]("hoodie_config")),
                     tags = Option(record.getAs[String]("tags")),
@@ -701,20 +687,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             logger.info(s"提取的表ID: $tableId")
 
             // 插入元数据记录
-            val success = insertTableMeta(
-                tableId = tableId,
-                schemaJson = schemaJson,
-                status = status,
-                isPartitioned = isPartitioned,
-                partitionExpr = null, // 可以后续扩展，自动检测分区表达式
-                hoodieConfig = null, // 可以后续扩展，自动读取Hudi配置
-                tags = tags,
-                description = description,
-                sourceDb = sourceDb,
-                sourceTable = sourceTable,
-                dbType = dbType,
-                tablePath = metaTablePath
-            )
+            val success = insertTableMeta(tableId = tableId, schemaJson = schemaJson, status = status, partitionExpr = null, hoodieConfig = null, tags = tags, description = description, sourceDb = sourceDb, sourceTable = sourceTable, dbType = dbType, tablePath = metaTablePath)
 
             if (success) {
                 logger.info(s"✓ 成功从Hudi表提取schema并插入元数据表: $tableId (分区表: $isPartitioned)")
@@ -952,7 +925,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = updatedSchemaJson,
                     status = record.getAs[Int]("status"),
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(record.getAs[String]("partition_expr")),
                     hoodie_config = Option(record.getAs[String]("hoodie_config")),
                     tags = Option(record.getAs[String]("tags")),
@@ -1085,7 +1057,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = record.getAs[String]("schema"),
                     status = record.getAs[Int]("status"),
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(partitionExpr),
                     hoodie_config = Option(record.getAs[String]("hoodie_config")),
                     tags = Option(record.getAs[String]("tags")),
@@ -1146,7 +1117,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = record.getAs[String]("schema"),
                     status = record.getAs[Int]("status"),
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(record.getAs[String]("partition_expr")),
                     hoodie_config = Option(hoodieConfig),
                     tags = Option(record.getAs[String]("tags")),
@@ -1210,7 +1180,6 @@ class MetaHudiTableManager(spark: SparkSession) {
                     id = tableId,
                     schema = record.getAs[String]("schema"),
                     status = record.getAs[Int]("status"),
-                    is_partitioned = record.getAs[Boolean]("is_partitioned"),
                     partition_expr = Option(partitionExpr),
                     hoodie_config = Option(hoodieConfig),
                     tags = Option(record.getAs[String]("tags")),
@@ -1353,7 +1322,7 @@ class MetaHudiTableManager(spark: SparkSession) {
      * @param hmsServerAddress  HMS服务器地址
      * @return Hudi配置JSON字符串
      */
-    private def generateHoodieConfig(primaryKey: String, hmsServerAddress: String): String = {
+    private def generateHoodieConfig(tableId: String, primaryKey: String, hmsServerAddress: String): String = {
         try {
             // 加载默认配置
             val defaultConfig = loadHoodieDefaultConfig()
@@ -1363,6 +1332,7 @@ class MetaHudiTableManager(spark: SparkSession) {
                 // 如果加载失败，返回硬编码的默认配置
                 return s"""
                 {
+                    "hoodie.table.name": "${tableId}",
                     "hoodie.datasource.write.table.type": "COPY_ON_WRITE",
                     "hoodie.table.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator",
                     "hoodie.table.recordkey.fields": "$primaryKey",
@@ -1370,6 +1340,8 @@ class MetaHudiTableManager(spark: SparkSession) {
                     "hoodie.datasource.insert.dup.policy": "insert",
                     "hoodie.datasource.meta.sync.enable": "true",
                     "hoodie.datasource.meta_sync.condition.sync": "true",
+                    "hoodie.datasource.write.partitionpath.field": "cdc_dt",
+                    "hoodie.datasource.write.hive_style_partitioning": "true",
                     "hoodie.datasource.hive_sync.enable": "true",
                     "hoodie.datasource.hive_sync.mode": "hms",
                     "hoodie.datasource.hive_sync.metastore.uris": "$hmsServerAddress",
@@ -1436,18 +1408,7 @@ class MetaHudiTableManager(spark: SparkSession) {
      * @param metaTablePath   元数据表的存储路径
      * @return 是否操作成功
      */
-    def insertTableMetaFromTdsql(tdsqlUrl: String,
-                                tdsqlUser: String,
-                                tdsqlPassword: String,
-                                tdsqlDatabase: String,
-                                tdsqlTable: String,
-                                tableId: String = null,
-                                status: Int = 0,
-                                isPartitioned: Boolean = true,
-                                partitionExpr: String = "trunc(create_time, 'year')",
-                                tags: String = null,
-                                description: String = null,
-                                metaTablePath: String): Boolean = {
+    def insertTableMetaFromTdsql(tdsqlUrl: String, tdsqlUser: String, tdsqlPassword: String, tdsqlDatabase: String, tdsqlTable: String, tableId: String = null, status: Int = 0, partitionExpr: String = "trunc(create_time, 'year')", tags: String = null, description: String = null, metaTablePath: String): Boolean = {
 
         var connection: Connection = null
         try {
@@ -1491,29 +1452,15 @@ class MetaHudiTableManager(spark: SparkSession) {
             val primaryKey = getTdsqlTablePrimaryKey(connection, tdsqlDatabase, tdsqlTable)
 
             // 使用新的配置生成方法，从JSON文件加载配置
-            val hoodieConfig = generateHoodieConfig(primaryKey, hmsServerAddress)
+            val hoodieConfig = generateHoodieConfig(finalTableId, primaryKey, hmsServerAddress)
 
             // 插入元数据记录
-            val success = insertTableMeta(
-                tableId = finalTableId,
-                schemaJson = schemaJson,
-                status = status,
-                isPartitioned = isPartitioned,
-                partitionExpr = partitionExpr,
-                hoodieConfig = hoodieConfig,
-                tags = tags,
-                description = description,
-                sourceDb = tdsqlDatabase,
-                sourceTable = tdsqlTable,
-                dbType = "TDSQL",   
-                tablePath = metaTablePath
-            )
+            val success = insertTableMeta(tableId = finalTableId, schemaJson = schemaJson, status = status, partitionExpr = partitionExpr, hoodieConfig = hoodieConfig, tags = tags, description = description, sourceDb = tdsqlDatabase, sourceTable = tdsqlTable, dbType = "TDSQL", tablePath = metaTablePath)
 
             if (success) {
                 logger.info(s"✓ 成功从TDSQL表创建元数据记录: $finalTableId")
                 logger.info(s"  源库表: $tdsqlDatabase.$tdsqlTable")
                 logger.info(s"  字段数: ${tdsqlSchema.fields.length}")
-                logger.info(s"  分区表: $isPartitioned")
             } else {
                 logger.error(s"✗ 从TDSQL表创建元数据记录失败: $finalTableId")
             }
@@ -1812,7 +1759,7 @@ class MetaHudiTableManager(spark: SparkSession) {
         }
 
         // 4. 构建TBLPROPERTIES
-        val tblProperties = buildTblProperties(tableId, hoodieConfig, isPartitioned)
+        val tblProperties = buildTblProperties(tableId, hoodieConfig)
 
         // 5. 构建完整的DDL
         val ddl = s"""CREATE TABLE IF NOT EXISTS $tableId (
@@ -1881,37 +1828,9 @@ class MetaHudiTableManager(spark: SparkSession) {
      * @param isPartitioned 是否分区表
      * @return TBLPROPERTIES字符串
      */
-    private def buildTblProperties(tableId: String, hoodieConfig: Option[String], isPartitioned: Boolean): String = {
-        
-        // 默认的Hudi配置
-        val defaultProperties = Map(
-            "hoodie.datasource.write.table.type" -> "COPY_ON_WRITE",
-            "hoodie.datasource.write.keygenerator.class" -> "org.apache.hudi.keygen.SimpleKeyGenerator",
-            "hoodie.table.recordkey.fields" -> "id",
-            "hoodie.datasource.write.operation" -> "upsert",
-            "hoodie.datasource.insert.dup.policy" -> "insert",
-            "hoodie.datasource.write.precombine.field" -> "update_time",
-            "hoodie.index.type" -> "BUCKET",
-            "hoodie.index.bucket.engine" -> "SIMPLE",
-            "hoodie.bucket.index.num.buckets" -> "20",
-            "hoodie.cleaner.commits.retained" -> "24",
-            "hoodie.insert.shuffle.parallelism" -> "10",
-            "hoodie.upsert.shuffle.parallelism" -> "10",
-            "hoodie.bulkinsert.shuffle.parallelism" -> "10"
-        )
-
-        // 如果是分区表，添加分区相关配置
-        val partitionProperties = if (isPartitioned) {
-            Map(
-                "hoodie.datasource.write.partitionpath.field" -> "cdc_dt",
-                "hoodie.datasource.write.hive_style_partitioning" -> "true"
-            )
-        } else {
-            Map.empty[String, String]
-        }
-
+    private def buildTblProperties(tableId: String, hoodieConfig: Option[String]) = {
         // 合并配置
-        var allProperties = partitionProperties
+        var allProperties = Map.empty[String, String]
         // 判断hoodieConfig是否为空
         if (hoodieConfig.isDefined && hoodieConfig.get.nonEmpty) {
             // 使用FastJSON解析hoodieConfig json字符串为Map结构
@@ -1921,9 +1840,7 @@ class MetaHudiTableManager(spark: SparkSession) {
             val hoodieConfigMap = JSON.parseObject(hoodieConfig.get).asScala.toMap.map {
                 case (k, v) => k -> v.toString
             }
-            allProperties = defaultProperties ++ partitionProperties ++ hoodieConfigMap
-        } else {
-            allProperties = defaultProperties ++ partitionProperties
+            allProperties = hoodieConfigMap
         }
 
         // 构建TBLPROPERTIES字符串
@@ -2004,7 +1921,7 @@ case class MetaHudiTableRecord(
                                   id: String,
                                   schema: String,
                                   status: Int,
-                                  is_partitioned: Boolean,
+                                  is_partitioned: Boolean = true,
                                   partition_expr: Option[String],
                                   hoodie_config: Option[String],
                                   tags: Option[String],
