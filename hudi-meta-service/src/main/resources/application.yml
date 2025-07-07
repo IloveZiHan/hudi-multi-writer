@@ -1,0 +1,88 @@
+# Hudi Meta Service 配置文件
+spring:
+  application:
+    name: hudi-meta-service
+  profiles:
+    active: dev
+  
+  # Jackson配置
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# 自定义配置
+meta:
+  table:
+    path: "/tmp/hudi_tables/meta_hudi_table"
+
+# Spark配置
+spark:
+  app:
+    name: "Hudi Meta Service"
+  master: "local[*]"
+  sql:
+    warehouse:
+      dir: "/tmp/spark-warehouse"
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    cn.com.multi_writer: DEBUG
+    org.apache.spark: WARN
+    org.apache.hadoop: WARN
+    org.apache.hudi: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/hudi-meta-service.log
+    max-size: 100MB
+    max-history: 10
+
+---
+# 开发环境配置
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+# 开发环境配置
+meta:
+  table:
+    path: "/tmp/hudi_tables/meta_hudi_table"
+
+spark:
+  master: "local[*]"
+
+logging:
+  level:
+    cn.com.multi_writer: DEBUG
+
+---
+# 生产环境配置
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# 生产环境配置
+meta:
+  table:
+    path: "/data/hudi_tables/meta_hudi_table"
+
+spark:
+  master: "yarn"
+  app:
+    name: "Hudi Meta Service Production"
+
+logging:
+  level:
+    root: WARN
+    cn.com.multi_writer: INFO 
