@@ -26,3 +26,7 @@ replay_pid*
 /spark-hudi-multi-writer/src/test/java/cn/com/multi_writer/TdsqlDataKafkaProducerTest.java
 /spark-hudi-multi-writer/src/main/resources/table_schema.json
 /spark-hudi-multi-writer/src/test/scala/cn/com/multi_writer/meta/MetaHudiTableManagerTest02.java
+/hudi-meta-service/target/
+/hudi-meta-web/target/
+/hudi-meta-frontend/node_modules/
+/.idea/
