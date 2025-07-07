@@ -1,0 +1,105 @@
+# Hudi Meta Web 应用配置文件
+server:
+  port: 8080
+  servlet:
+    context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: hudi-meta-web
+  profiles:
+    active: dev
+  
+  # Jackson配置
+  jackson:
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+  # Actuator配置
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info,metrics,env
+        base-path: /actuator
+    endpoint:
+      health:
+        show-details: when_authorized
+
+# Spark配置
+spark:
+  app:
+    name: "Hudi Meta Web"
+  master: "local[*]"
+
+# Hudi配置
+hudi:
+  meta:
+    table:
+      path: "/tmp/spark-warehouse/meta_hudi_table"
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    cn.com.multi_writer: DEBUG
+    org.apache.spark: WARN
+    org.apache.hadoop: WARN
+    org.apache.hudi: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/hudi-meta-web.log
+    max-size: 100MB
+    max-history: 10
+
+---
+# 开发环境配置
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+# 开发环境Spark配置
+spark:
+  master: "local[*]"
+
+# 开发环境Hudi配置
+hudi:
+  meta:
+    table:
+      path: "/tmp/spark-warehouse/meta_hudi_table"
+
+# 开发环境日志配置
+logging:
+  level:
+    cn.com.multi_writer: DEBUG
+
+---
+# 生产环境配置
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# 生产环境Spark配置
+spark:
+  master: "yarn"
+  app:
+    name: "Hudi Meta Web Production"
+
+logging:
+  level:
+    root: WARN
+    cn.com.multi_writer: INFO 
