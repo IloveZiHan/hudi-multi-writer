@@ -25,6 +25,7 @@ import java.sql.Timestamp
  * 6. 【新增】使用HudiConcurrentWriter实现并发写入，显著提升性能
  * 7. 【新增】支持可配置的并发写入参数，灵活控制并发数和超时时间
  * 8. 【新增】提供详细的写入结果统计和错误处理
+ * 9. 【性能优化】HudiConcurrentWriter全局模式，避免频繁创建/销毁线程池
  *
  * 配置参数说明：
  * - spark.meta.table.path: 元数据表路径 (默认: /tmp/hudi_tables/meta_hudi_table)
@@ -37,19 +38,22 @@ import java.sql.Timestamp
 object TdsqlCdcStreamJob {
 
     private val logger: Logger = LoggerFactory.getLogger(TdsqlCdcStreamJob.getClass)
+    
+    // 【关键优化】全局HudiConcurrentWriter实例，生命周期与流作业绑定
+    @volatile private var globalConcurrentWriter: Option[HudiConcurrentWriter] = None
+    
+    // 用于同步访问全局写入器的锁
+    private val writerLock = new Object()
 
     def main(args: Array[String]): Unit = {
         val spark = SparkSessionManager.createSparkSession("TdSQL CDC Stream Job")
 
         try {
-            logger.info("=== 优化后的TdSQL CDC Stream Job启动 ===")
-
-            // 创建MetaHudiTableManager实例
-            val metaManager = new MetaHudiTableManager(spark)
+            logger.info("=== 优化后的TdSQL CDC Stream Job启动（全局并发写入器模式） ===")
 
             // 创建相关实例
+            val metaManager = new MetaHudiTableManager(spark)
             val kafkaSource = new KafkaSource(spark)
-            val hudiWriter = new HudiWriter(spark)
             val batchProcessor = new TdsqlBatchProcessor(spark)
             val dataCleaner = new DataCleaner(spark)
             
@@ -62,33 +66,140 @@ object TdsqlCdcStreamJob {
             
             logger.info(s"HudiConcurrentWriter配置 - 最大并发数: ${concurrentWriterConfig.maxConcurrency}, 超时时间: ${concurrentWriterConfig.timeoutSeconds}秒, 快速失败: ${concurrentWriterConfig.failFast}")
 
+            // 【关键优化】在流作业开始时创建全局HudiConcurrentWriter实例
+            writerLock.synchronized {
+                globalConcurrentWriter = Some(HudiConcurrentWriter.withConfig(spark, concurrentWriterConfig))
+                logger.info("✓ 已创建全局HudiConcurrentWriter实例，生命周期与流作业绑定")
+            }
+
             // 创建数据流
             val parsedStream = kafkaSource.createParsedStream()
 
-            // 启动流处理
+            // 启动流处理 - 使用优化后的批处理函数
             val query = parsedStream.writeStream
                 .outputMode("append")
                 .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
-                    processBatch(batchDF.sparkSession, batchDF, batchId, batchProcessor, dataCleaner, metaManager, concurrentWriterConfig)
+                    processBatchOptimized(batchDF.sparkSession, batchDF, batchId, batchProcessor, dataCleaner, metaManager)
                 }
                 .trigger(org.apache.spark.sql.streaming.Trigger.ProcessingTime("5 seconds"))
                 .start()
 
-            logger.info("流处理已启动，使用动态表配置...")
+            logger.info("流处理已启动，使用全局并发写入器模式...")
             query.awaitTermination()
 
         } catch {
             case e: Exception =>
                 logger.error(s"程序执行出错: ${e.getMessage}", e)
         } finally {
+            // 【关键】在流作业结束时释放全局写入器资源
+            writerLock.synchronized {
+                globalConcurrentWriter.foreach { writer =>
+                    logger.info("正在关闭全局HudiConcurrentWriter...")
+                    writer.shutdown()
+                    logger.info("✓ 全局HudiConcurrentWriter已关闭")
+                }
+                globalConcurrentWriter = None
+            }
             spark.stop()
             logger.info("程序执行完成")
         }
     }
 
     /**
-     * 使用动态表配置的微批次数据处理函数
+     * 优化后的批次处理函数 - 使用全局HudiConcurrentWriter实例
+     * 
+     * 性能优化：
+     * 1. 使用全局HudiConcurrentWriter，避免频繁创建/销毁线程池
+     * 2. 减少对象创建开销，提升内存使用效率
+     * 3. 减少GC压力，提升整体性能
      */
+    def processBatchOptimized(spark: SparkSession,
+                            batchDF: DataFrame,
+                            batchId: Long,
+                            batchProcessor: TdsqlBatchProcessor,
+                            dataCleaner: DataCleaner,
+                            metaManager: MetaHudiTableManager): Unit = {
+        
+        val startTime = System.currentTimeMillis()
+        logger.info(s"========== 处理批次 $batchId (全局并发写入器模式) ==========")
+
+        val configs = SparkSessionManager.getStreamingConfigs(spark)
+        val metaTablePath = configs("metaTablePath")
+
+        if (batchDF.isEmpty) {
+            logger.info("本批次无数据")
+            return
+        }
+        
+        try {
+            // 获取全局并发写入器实例
+            val concurrentWriter = writerLock.synchronized {
+                globalConcurrentWriter.getOrElse {
+                    throw new IllegalStateException("全局HudiConcurrentWriter实例未初始化，请检查流作业启动流程")
+                }
+            }
+
+            // 验证写入器状态
+            if (!concurrentWriter.isActive) {
+                throw new IllegalStateException("全局HudiConcurrentWriter已关闭，无法处理批次")
+            }
+
+            // 清理上次batch可能遗留的任务
+            val clearedTaskCount = concurrentWriter.clearPendingTasks()
+            if (clearedTaskCount > 0) {
+                logger.warn(s"清理了 $clearedTaskCount 个遗留任务")
+            }
+
+            // 记录写入器状态
+            logger.info(s"使用全局并发写入器 - ${concurrentWriter.getPoolStats}")
+
+            // 获取动态表配置
+            val dynamicTableConfigs = getDynamicTableConfigs(metaManager, metaTablePath)
+            
+            if (dynamicTableConfigs.isEmpty) {
+                logger.info("未找到已上线的表配置，跳过本批次处理")
+                return
+            }
+
+            logger.info(s"动态获取到 ${dynamicTableConfigs.length} 个已上线表配置")
+
+            // 数据清洗和缓存
+            val cleanedDF = dataCleaner.cleanData(batchDF)
+            val cachedDF = cleanedDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
+            val cachedCount = cachedDF.count()
+
+            logger.info(s"缓存数据量: $cachedCount 条")
+
+            // 【关键优化】直接使用全局并发写入器，无需创建和销毁
+            transformationWithConcurrentWriter(spark, cachedDF, batchId, 
+                                             batchProcessor, concurrentWriter, dynamicTableConfigs)
+
+            logger.info(s"批次 $batchId 所有Hudi表并发写入完成")
+
+            // 释放缓存
+            cachedDF.unpersist()
+
+            val endTime = System.currentTimeMillis()
+            val processingTime = endTime - startTime
+            
+            logger.info(s"批次处理完成，耗时: ${processingTime}ms")
+
+        } catch {
+            case e: Exception =>
+                logger.error(s"批次 $batchId 处理过程中出错: ${e.getMessage}", e)
+                throw new RuntimeException(s"批次 $batchId 处理过程中出错: ${e.getMessage}")
+        }
+
+        logger.info("========================================")
+    }
+
+    /**
+     * 【已弃用】使用动态表配置的微批次数据处理函数
+     * 
+     * @deprecated 建议使用 processBatchOptimized 获得更好的性能
+     * 此方法保留用于兼容性，但会在每个batch创建和销毁HudiConcurrentWriter实例
+     */
+    @deprecated("建议使用 processBatchOptimized 获得更好的性能")
     def processBatch(spark: SparkSession
                      , batchDF: DataFrame
                      , batchId: Long
@@ -99,6 +210,7 @@ object TdsqlCdcStreamJob {
         
         val startTime = System.currentTimeMillis()
         logger.info(s"========== 处理批次 $batchId (动态表配置) ==========")
+        logger.warn("使用已弃用的processBatch方法，建议使用processBatchOptimized获得更好的性能")
 
         val configs = SparkSessionManager.getStreamingConfigs(spark)
         val metaTablePath = configs("metaTablePath")
@@ -160,6 +272,24 @@ object TdsqlCdcStreamJob {
         }
 
         logger.info("========================================")
+    }
+
+    /**
+     * 获取全局HudiConcurrentWriter实例（用于外部访问）
+     */
+    def getGlobalConcurrentWriter: Option[HudiConcurrentWriter] = {
+        writerLock.synchronized {
+            globalConcurrentWriter
+        }
+    }
+
+    /**
+     * 检查全局HudiConcurrentWriter是否可用
+     */
+    def isGlobalWriterAvailable: Boolean = {
+        writerLock.synchronized {
+            globalConcurrentWriter.exists(_.isActive)
+        }
     }
 
     /**

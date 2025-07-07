@@ -327,6 +327,41 @@ class HudiConcurrentWriter(
     }
 
     /**
+     * 检查写入器是否仍然可用
+     * 
+     * @return 如果线程池未关闭且未终止，返回true
+     */
+    def isActive: Boolean = {
+        !threadPool.isShutdown && !threadPool.isTerminated
+    }
+
+    /**
+     * 获取线程池详细统计信息
+     * 
+     * @return 格式化的线程池统计信息字符串
+     */
+    def getPoolStats: String = {
+        s"活跃线程: ${threadPool.getActiveCount}, " +
+        s"队列大小: ${threadPool.getQueue.size()}, " +
+        s"已完成任务: ${threadPool.getCompletedTaskCount}, " +
+        s"总任务数: ${threadPool.getTaskCount}, " +
+        s"核心线程数: ${threadPool.getCorePoolSize}, " +
+        s"最大线程数: ${threadPool.getMaximumPoolSize}"
+    }
+
+    /**
+     * 清理待处理的任务队列（不关闭线程池）
+     * 适用于全局模式，清理上次batch遗留的任务
+     */
+    def clearPendingTasks(): Int = {
+        val clearedTasks = taskQueue.pollAllTasks()
+        if (clearedTasks.nonEmpty) {
+            logger.warn(s"清理了 ${clearedTasks.length} 个待处理任务")
+        }
+        clearedTasks.length
+    }
+
+    /**
      * 关闭写入器，释放资源
      */
     def shutdown(): Unit = {
