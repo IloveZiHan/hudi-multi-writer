@@ -1,0 +1,71 @@
+/* App.css - 主应用样式 */
+
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 16px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  gap: 8px;
+}
+
+.logo span {
+  margin-left: 8px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .logo {
+    margin: 8px;
+    font-size: 14px;
+  }
+}
+
+/* 菜单项样式 */
+.ant-menu-item {
+  cursor: pointer;
+}
+
+.ant-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 内容区域样式 */
+.content-wrapper {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 头部样式 */
+.header-title {
+  color: #1890ff;
+  font-weight: 600;
+}
+
+/* 用户信息样式 */
+.user-info {
+  display: flex;
+  align-items: center;
+  color: #666;
+}
+
+.user-info .anticon {
+  margin-right: 8px;
+}
+
+/* 全局样式覆盖 */
+.ant-layout-sider-collapsed .logo span {
+  display: none;
+}
+
+.ant-layout-sider-collapsed .logo {
+  padding: 0;
+  justify-content: center;
+} 
