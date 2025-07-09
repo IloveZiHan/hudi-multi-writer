@@ -12,6 +12,7 @@ import {
   Typography,
   Card,
   Descriptions,
+  Table,
 } from 'antd';
 import {
   EyeOutlined,
@@ -20,7 +21,6 @@ import {
   PartitionOutlined,
   TagsOutlined,
   CalendarOutlined,
-  UserOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { MetaTableDTO, TableStatus, TableStatusLabels, TableStatusColors } from '@types/api';
@@ -49,6 +49,68 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
     if (!tags) return [];
     return tags.split(',').map(tag => tag.trim()).filter(Boolean);
   };
+
+  // 解析表结构 JSON
+  const parseTableSchema = (schema: string) => {
+    try {
+      const parsed = JSON.parse(schema);
+      if (parsed.type === 'struct' && parsed.fields) {
+        return parsed.fields.map((field: any, index: number) => ({
+          key: index,
+          name: field.name,
+          type: field.type,
+          nullable: field.nullable,
+          comment: field.metadata?.comment || '无注释',
+        }));
+      }
+      return [];
+    } catch (error) {
+      console.error('解析表结构失败:', error);
+      return [];
+    }
+  };
+
+  // 表结构表格列定义
+  const schemaColumns = [
+    {
+      title: '字段名',
+      dataIndex: 'name',
+      key: 'name',
+      width: 150,
+      render: (text: string) => <Text strong>{text}</Text>,
+    },
+    {
+      title: '数据类型',
+      dataIndex: 'type',
+      key: 'type',
+      width: 120,
+      render: (text: string) => <Tag color="blue">{text}</Tag>,
+    },
+    {
+      title: '是否可为空',
+      dataIndex: 'nullable',
+      key: 'nullable',
+      width: 100,
+      render: (nullable: boolean) => (
+        <Badge
+          status={nullable ? 'warning' : 'success'}
+          text={nullable ? '可为空' : '不可为空'}
+        />
+      ),
+    },
+    {
+      title: '注释',
+      dataIndex: 'comment',
+      key: 'comment',
+      render: (text: string) => (
+        text === '无注释' ? (
+          <Text type="secondary">{text}</Text>
+        ) : (
+          <Text>{text}</Text>
+        )
+      ),
+    },
+  ];
 
   return (
     <Modal
@@ -108,15 +170,17 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
               表结构
             </Space>
           </Title>
-          <TextArea
-            value={record.schema}
-            rows={8}
-            style={{ 
-              fontFamily: 'monospace',
-              backgroundColor: '#f5f5f5',
-              border: '1px solid #d9d9d9',
+          <Table
+            columns={schemaColumns}
+            dataSource={parseTableSchema(record.schema)}
+            pagination={false}
+            size="small"
+            bordered
+            style={{ marginTop: 12 }}
+            scroll={{ x: 600 }}
+            locale={{
+              emptyText: '暂无字段信息',
             }}
-            readOnly
           />
         </Card>
 
@@ -138,12 +202,6 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
             </Descriptions.Item>
             <Descriptions.Item label="源表名">
               <Text>{record.sourceTable || '-'}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="目标数据库">
-              <Text>{record.targetDb || '-'}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="目标表名">
-              <Text>{record.targetTable || '-'}</Text>
             </Descriptions.Item>
           </Descriptions>
         </Card>
@@ -198,18 +256,6 @@ const TableDetailModal: React.FC<TableDetailModalProps> = ({
             </Descriptions.Item>
             <Descriptions.Item label="更新时间">
               <Text>{dayjs(record.updatedTime).format('YYYY-MM-DD HH:mm:ss')}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="创建人">
-              <Space>
-                <UserOutlined />
-                <Text>{record.creator || '未知'}</Text>
-              </Space>
-            </Descriptions.Item>
-            <Descriptions.Item label="更新人">
-              <Space>
-                <UserOutlined />
-                <Text>{record.updater || '未知'}</Text>
-              </Space>
             </Descriptions.Item>
           </Descriptions>
         </Card>

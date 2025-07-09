@@ -14,6 +14,12 @@ import {
   Col,
   Alert,
   Tabs,
+  Modal,
+  Table,
+  Tag,
+  Progress,
+  Descriptions,
+  Typography,
 } from 'antd';
 import {
   DatabaseOutlined,
@@ -23,10 +29,18 @@ import {
   ReloadOutlined,
   BellOutlined,
   SecurityScanOutlined,
+  ThunderboltOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
+import { useRequest } from 'ahooks';
+import tableApiService from '@services/tableApi';
+import './index.less';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Title, Text } = Typography;
 
 /**
  * 系统设置组件
@@ -35,6 +49,38 @@ const { TextArea } = Input;
 const Settings: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [initLoading, setInitLoading] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [dropLoading, setDropLoading] = useState(false);
+  const [metaTablesStatus, setMetaTablesStatus] = useState<any>(null);
+
+  // 检查元数据表是否存在
+  const { data: metaTablesExist, run: checkMetaTablesExist } = useRequest(
+    () => tableApiService.checkMetaTablesExist(),
+    {
+      manual: true,
+      onSuccess: (exists) => {
+        console.log('元数据表是否存在:', exists);
+      },
+      onError: (error) => {
+        message.error(`检查元数据表失败: ${error.message}`);
+      },
+    }
+  );
+
+  // 获取元数据表状态
+  const { data: metaTablesStatusData, run: getMetaTablesStatus } = useRequest(
+    () => tableApiService.getMetaTablesStatus(),
+    {
+      manual: true,
+      onSuccess: (status) => {
+        setMetaTablesStatus(status);
+      },
+      onError: (error) => {
+        message.error(`获取元数据表状态失败: ${error.message}`);
+      },
+    }
+  );
 
   // 处理表单提交
   const handleSubmit = async (values: any) => {
@@ -56,6 +102,222 @@ const Settings: React.FC = () => {
     form.resetFields();
     message.info('设置已重置');
   };
+
+  // 初始化Hudi元数据表
+  const handleInitializeMetaTables = async () => {
+    Modal.confirm({
+      title: '确认初始化',
+      icon: <ExclamationCircleOutlined />,
+      content: '确定要初始化Hudi元数据表吗？这将创建必要的系统表结构。',
+      okText: '确定',
+      cancelText: '取消',
+      onOk: async () => {
+        setInitLoading(true);
+        try {
+          await tableApiService.initializeHudiMetaTables();
+          message.success('Hudi元数据表初始化成功！');
+          // 刷新状态
+          checkMetaTablesExist();
+          getMetaTablesStatus();
+        } catch (error) {
+          message.error(`初始化失败: ${error}`);
+        } finally {
+          setInitLoading(false);
+        }
+      },
+    });
+  };
+
+  // 检查元数据表状态
+  const handleCheckMetaTables = async () => {
+    setCheckLoading(true);
+    try {
+      await Promise.all([checkMetaTablesExist(), getMetaTablesStatus()]);
+      message.success('检查完成');
+    } catch (error) {
+      message.error(`检查失败: ${error}`);
+    } finally {
+      setCheckLoading(false);
+    }
+  };
+
+  // 删除所有元数据表
+  const handleDropMetaTables = async () => {
+    Modal.confirm({
+      title: '危险操作',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+            警告：此操作将删除所有Hudi元数据表！
+          </p>
+          <p>这将导致：</p>
+          <ul>
+            <li>所有表配置信息丢失</li>
+            <li>系统无法正常工作</li>
+            <li>需要重新初始化才能恢复</li>
+          </ul>
+          <p>确定要继续吗？</p>
+        </div>
+      ),
+      okText: '确定删除',
+      cancelText: '取消',
+      okType: 'danger',
+      onOk: async () => {
+        setDropLoading(true);
+        try {
+          await tableApiService.dropAllMetaTables();
+          message.success('元数据表删除成功');
+          // 刷新状态
+          checkMetaTablesExist();
+          getMetaTablesStatus();
+        } catch (error) {
+          message.error(`删除失败: ${error}`);
+        } finally {
+          setDropLoading(false);
+        }
+      },
+    });
+  };
+
+  // 数据库初始化选项卡
+  const DatabaseInitConfig = () => (
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Alert
+        message="数据库初始化"
+        description="管理Hudi元数据表的创建、检查和维护"
+        type="info"
+        showIcon
+        icon={<DatabaseOutlined />}
+      />
+
+      {/* 当前状态 */}
+      <Card title="当前状态" size="small">
+        <Descriptions column={2} bordered size="small">
+          <Descriptions.Item label="元数据表状态">
+            {metaTablesExist === true ? (
+              <Tag color="green" icon={<CheckCircleOutlined />}>
+                已创建
+              </Tag>
+            ) : metaTablesExist === false ? (
+              <Tag color="red" icon={<ExclamationCircleOutlined />}>
+                未创建
+              </Tag>
+            ) : (
+              <Tag color="default">未知</Tag>
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="系统状态">
+            {metaTablesExist === true ? (
+              <Tag color="green">正常</Tag>
+            ) : (
+              <Tag color="orange">需要初始化</Tag>
+            )}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      {/* 元数据表详情 */}
+      {metaTablesStatus && (
+        <Card title="元数据表详情" size="small">
+          <Table
+            size="small"
+            dataSource={metaTablesStatus.tables || []}
+            columns={[
+              {
+                title: '表名',
+                dataIndex: 'name',
+                key: 'name',
+              },
+              {
+                title: '状态',
+                dataIndex: 'status',
+                key: 'status',
+                render: (status: string) => (
+                  <Tag color={status === 'EXISTS' ? 'green' : 'red'}>
+                    {status === 'EXISTS' ? '存在' : '不存在'}
+                  </Tag>
+                ),
+              },
+              {
+                title: '记录数',
+                dataIndex: 'count',
+                key: 'count',
+                render: (count: number) => count?.toLocaleString() || 0,
+              },
+              {
+                title: '大小',
+                dataIndex: 'size',
+                key: 'size',
+              },
+              {
+                title: '最后更新',
+                dataIndex: 'lastModified',
+                key: 'lastModified',
+              },
+            ]}
+            pagination={false}
+          />
+        </Card>
+      )}
+
+      {/* 操作按钮 */}
+      <Card title="操作" size="small">
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                onClick={handleInitializeMetaTables}
+                loading={initLoading}
+                block
+                disabled={metaTablesExist === true}
+              >
+                初始化元数据表
+              </Button>
+            </Col>
+            <Col span={8}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleCheckMetaTables}
+                loading={checkLoading}
+                block
+              >
+                检查状态
+              </Button>
+            </Col>
+            <Col span={8}>
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                onClick={handleDropMetaTables}
+                loading={dropLoading}
+                block
+                disabled={metaTablesExist === false}
+              >
+                删除所有表
+              </Button>
+            </Col>
+          </Row>
+
+          {/* 说明信息 */}
+          <Alert
+            message="操作说明"
+            description={
+              <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                <li>初始化元数据表：创建Hudi系统必需的元数据表结构</li>
+                <li>检查状态：检查当前元数据表的存在状态和详细信息</li>
+                <li>删除所有表：危险操作，将删除所有元数据表</li>
+              </ul>
+            }
+            type="info"
+            showIcon
+          />
+        </Space>
+      </Card>
+    </Space>
+  );
 
   // 数据库配置选项卡
   const DatabaseConfig = () => (
@@ -263,6 +525,16 @@ const Settings: React.FC = () => {
   // 选项卡配置
   const tabItems = [
     {
+      key: 'database-init',
+      label: (
+        <span>
+          <ThunderboltOutlined />
+          数据库初始化
+        </span>
+      ),
+      children: <DatabaseInitConfig />,
+    },
+    {
       key: 'database',
       label: (
         <span>
@@ -295,7 +567,18 @@ const Settings: React.FC = () => {
   ];
 
   return (
-    <div>
+    <div className="settings">
+      {/* 页面标题 */}
+      <div className="page-header">
+        <Title level={2}>
+          <SettingOutlined />
+          系统设置
+        </Title>
+        <Text type="secondary">
+          配置系统运行参数、数据库连接信息和监控告警设置
+        </Text>
+      </div>
+
       <Card
         title={
           <Space>

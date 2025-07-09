@@ -92,7 +92,7 @@ export interface SearchCriteria {
  * 批量操作请求类型
  */
 export interface BatchOperationRequest {
-  operation: 'delete' | 'online' | 'offline' | 'export';
+  operation: 'delete' | 'online' | 'offline' | 'export' | 'restore' | 'permanent-delete';
   ids: string[];
   params?: Record<string, any>;
 }
@@ -124,6 +124,7 @@ export interface TableStatusStats {
 export enum TableStatus {
   OFFLINE = 0,
   ONLINE = 1,
+  DELETED = 2,
 }
 
 /**
@@ -132,6 +133,7 @@ export enum TableStatus {
 export const TableStatusLabels = {
   [TableStatus.OFFLINE]: '未上线',
   [TableStatus.ONLINE]: '已上线',
+  [TableStatus.DELETED]: '已删除',
 };
 
 /**
@@ -140,6 +142,7 @@ export const TableStatusLabels = {
 export const TableStatusColors = {
   [TableStatus.OFFLINE]: 'default',
   [TableStatus.ONLINE]: 'success',
+  [TableStatus.DELETED]: 'error',
 } as const;
 
 /**

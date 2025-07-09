@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { message } from 'antd';
-import { ApiResponse } from '@types/api';
+import { ApiResponse } from '../types/api';
 
 /**
  * HTTP客户端类

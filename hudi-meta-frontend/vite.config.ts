@@ -28,9 +28,20 @@ export default defineConfig({
     proxy: {
       // 代理API请求到后端服务器
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://127.0.0.1:8080',
         changeOrigin: true,
         secure: false,
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('代理错误:', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('代理请求:', req.method, req.url, '->', proxyReq.path);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('代理响应:', proxyRes.statusCode, req.url);
+          });
+        },
       },
     },
   },
@@ -76,12 +87,5 @@ export default defineConfig({
   // 依赖优化
   optimizeDeps: {
     include: ['react', 'react-dom', 'antd', 'axios', 'dayjs'],
-  },
-  
-  // 测试配置
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
   },
 }) 
