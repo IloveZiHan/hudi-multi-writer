@@ -5,9 +5,14 @@ import cn.com.multi_writer.service.dto.*;
 import cn.com.multi_writer.web.common.ApiResponse;
 import cn.com.multi_writer.web.exception.BusinessException;
 import cn.com.multi_writer.web.exception.ResourceNotFoundException;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +28,7 @@ import java.util.Optional;
  * Meta Table REST API 控制器
  * 提供所有表管理相关的HTTP接口
  */
+@Tag(name = "表管理接口", description = "提供Hudi元数据表的CRUD操作和管理功能")
 @RestController
 @RequestMapping("/api/meta/tables")
 @Validated
@@ -31,6 +37,7 @@ public class MetaTableController {
     private static final Logger logger = LoggerFactory.getLogger(MetaTableController.class);
     
     @Autowired
+    @Qualifier("mySQLMetaTableService")
     private MetaTableService metaTableService;
     
     /**
@@ -39,10 +46,16 @@ public class MetaTableController {
      * @param size 每页大小
      * @return 分页结果
      */
+    @Operation(summary = "获取所有表", description = "分页获取所有元数据表信息")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "获取成功"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "请求参数错误"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "服务器内部错误")
+    })
     @GetMapping
     public ApiResponse<PageResult<MetaTableDTO>> getAllTables(
-            @RequestParam(defaultValue = "0") @PositiveOrZero int page,
-            @RequestParam(defaultValue = "10") @Positive int size) {
+            @Parameter(description = "页码(从0开始)", example = "0") @RequestParam(defaultValue = "0") @PositiveOrZero int page,
+            @Parameter(description = "每页大小", example = "10") @RequestParam(defaultValue = "10") @Positive int size) {
         
         logger.info("获取所有表，页码: {}, 每页大小: {}", page, size);
         
@@ -54,14 +67,40 @@ public class MetaTableController {
             throw new BusinessException("获取表列表失败: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * 获取已删除表（分页）
+     * @param page 页码（从0开始）
+     * @param size 每页大小
+     * @return 分页结果
+     */
+    @Operation(summary = "获取已删除表", description = "分页获取已删除的元数据表信息")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "获取成功"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "请求参数错误"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "服务器内部错误")
+    })
+    @GetMapping("/deleted")
+    public ApiResponse<PageResult<MetaTableDTO>> getDeletedTables(
+            @Parameter(description = "页码(从0开始)", example = "0") @RequestParam(defaultValue = "0") @PositiveOrZero int page,
+            @Parameter(description = "每页大小", example = "10") @RequestParam(defaultValue = "10") @Positive int size) {
+        logger.info("获取已删除表，页码: {}, 每页大小: {}", page, size);
+        return ApiResponse.success(metaTableService.getDeletedTables(page, size));
+    }   
     
     /**
      * 根据ID获取表详情
      * @param id 表ID
      * @return 表详情
      */
+    @Operation(summary = "根据ID获取表详情", description = "根据表ID获取详细的元数据表信息")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "获取成功"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "表不存在"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "服务器内部错误")
+    })
     @GetMapping("/{id}")
-    public ApiResponse<MetaTableDTO> getTableById(@PathVariable @NotBlank String id) {
+    public ApiResponse<MetaTableDTO> getTableById(@Parameter(description = "表ID", example = "table_001") @PathVariable @NotBlank String id) {
         logger.info("根据ID获取表详情: {}", id);
         
         try {
@@ -83,6 +122,13 @@ public class MetaTableController {
      * @param request 创建表请求
      * @return 创建结果
      */
+    @Operation(summary = "创建新表", description = "创建新的元数据表")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "创建成功"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "请求参数错误"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "表已存在"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "服务器内部错误")
+    })
     @PostMapping
     public ApiResponse<String> createTable(@Valid @RequestBody CreateTableRequest request) {
         logger.info("创建新表: {}", request.getId());
@@ -109,8 +155,8 @@ public class MetaTableController {
      * @return 更新结果
      */
     @PutMapping("/{id}")
-    public ApiResponse<String> updateTable(@PathVariable @NotBlank String id, 
-                                         @Valid @RequestBody UpdateTableRequest request) {
+    public ApiResponse<String> updateTable(@PathVariable @NotBlank String id,
+                                           @Valid @RequestBody UpdateTableRequest request) {
         logger.info("更新表信息: {}", id);
         
         try {
@@ -214,7 +260,7 @@ public class MetaTableController {
      * @param id 表ID
      * @return 操作结果
      */
-    @PostMapping("/{id}/online")
+    @PutMapping("/{id}/online")
     public ApiResponse<String> onlineTable(@PathVariable @NotBlank String id) {
         logger.info("表上线: {}", id);
         
@@ -236,7 +282,7 @@ public class MetaTableController {
      * @param id 表ID
      * @return 操作结果
      */
-    @PostMapping("/{id}/offline")
+    @PutMapping("/{id}/offline")
     public ApiResponse<String> offlineTable(@PathVariable @NotBlank String id) {
         logger.info("表下线: {}", id);
         
@@ -422,6 +468,22 @@ public class MetaTableController {
             throw new BusinessException("获取表Schema信息失败: " + e.getMessage(), e);
         }
     }
+
+    @PutMapping("/{id}/restore")
+    public ApiResponse<String> restoreTable(@PathVariable @NotBlank String id) {
+        logger.info("恢复表: {}", id);
+        try {
+            boolean success = metaTableService.restoreTable(id);
+            if (success) {
+                return ApiResponse.success("表恢复成功: " + id);
+            } else {
+                throw new BusinessException("表恢复失败");
+            }
+        } catch (Exception e) {
+            logger.error("恢复表失败: {}", id, e);
+            throw new BusinessException("恢复表失败: " + e.getMessage(), e);
+        }
+    }
     
     /**
      * 获取表历史记录
@@ -448,8 +510,8 @@ public class MetaTableController {
      * @return 复制结果
      */
     @PostMapping("/{id}/copy")
-    public ApiResponse<String> copyTable(@PathVariable @NotBlank String id, 
-                                       @RequestParam @NotBlank String newId) {
+    public ApiResponse<String> copyTable(@PathVariable @NotBlank String id,
+                                         @RequestParam @NotBlank String newId) {
         logger.info("复制表配置: {} -> {}", id, newId);
         
         try {
@@ -481,5 +543,17 @@ public class MetaTableController {
             logger.error("获取表使用统计失败: {}", id, e);
             throw new BusinessException("获取表使用统计失败: " + e.getMessage(), e);
         }
+    }
+
+    @GetMapping("/system-tables")
+    public ApiResponse<List<Object>> getSystemTables() {
+        logger.info("获取系统表");
+        return ApiResponse.success(metaTableService.getSystemTables());
+    }
+
+    @GetMapping("/system-table-stats")
+    public ApiResponse<Object> getSystemTableStats() {
+        logger.info("获取系统表统计信息");
+        return ApiResponse.success(metaTableService.getSystemTableStats());
     }
 } 

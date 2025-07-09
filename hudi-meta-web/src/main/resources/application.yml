@@ -13,7 +13,41 @@ spring:
     name: hudi-meta-web
   profiles:
     active: dev
-  
+
+  # 数据源配置
+  datasource:
+    jdbc-url: jdbc:mysql://10.94.158.109:33061/mysql?useSSL=false&serverTimezone=GMT%2B8&characterEncoding=utf8
+    username: root
+    password: H5*ajAXVhT
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 连接池最大连接数
+      maximum-pool-size: 20
+      # 连接池最小空闲连接数
+      minimum-idle: 5
+      # 连接超时时间（毫秒）
+      connection-timeout: 30000
+      # 空闲连接超时时间（毫秒）
+      idle-timeout: 600000
+      # 连接最大生存时间（毫秒）
+      max-lifetime: 1800000
+      # 连接泄漏检测阈值（毫秒）
+      leak-detection-threshold: 60000
+      # 连接池名称
+      pool-name: HudiMetaPool
+      # MySQL特定配置
+      data-source-properties:
+        useSSL: false
+        allowPublicKeyRetrieval: true
+        serverTimezone: GMT+8
+        characterEncoding: utf8
+        useUnicode: true
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        rewriteBatchedStatements: true
+
   # Jackson配置
   jackson:
     default-property-inclusion: non_null
@@ -24,17 +58,46 @@ spring:
       fail-on-empty-beans: false
     deserialization:
       fail-on-unknown-properties: false
+  
+  # SpringDoc OpenAPI 3配置
+  springdoc:
+    api-docs:
+      enabled: true
+      path: /v3/api-docs
+      title: Hudi Meta Web API
+      description: Hudi元数据管理系统Web API接口文档
+      version: 1.0.0
+      contact:
+        name: Hudi Multi Writer Team
+        url: https://github.com/hudi-multi-writer
+        email: support@hudi-multi-writer.com
+      license:
+        name: Apache License 2.0
+        url: http://www.apache.org/licenses/LICENSE-2.0
+    swagger-ui:
+      enabled: true
+      path: /swagger-ui.html
+      operations-sorter: alpha
+      tags-sorter: alpha
+      doc-expansion: none
+    packages-to-scan: cn.com.multi_writer.web.controller
 
   # Actuator配置
   management:
     endpoints:
       web:
         exposure:
-          include: health,info,metrics,env
+          include: health,info,metrics,env,hikaricp
         base-path: /actuator
     endpoint:
       health:
         show-details: when_authorized
+      hikaricp:
+        enabled: true
+    metrics:
+      export:
+        prometheus:
+          enabled: true
 
 # Spark配置
 spark:
@@ -53,6 +116,8 @@ logging:
   level:
     root: INFO
     cn.com.multi_writer: DEBUG
+    com.zaxxer.hikari: DEBUG
+    org.springframework.jdbc: DEBUG
     org.apache.spark: WARN
     org.apache.hadoop: WARN
     org.apache.hudi: INFO
@@ -62,7 +127,7 @@ logging:
   file:
     name: logs/hudi-meta-web.log
     max-size: 100MB
-    max-history: 10
+    max-history: 30
 
 ---
 # 开发环境配置
@@ -70,6 +135,15 @@ spring:
   config:
     activate:
       on-profile: dev
+  
+  # 开发环境数据源配置
+  datasource:
+    jdbc-url: jdbc:mysql://10.94.158.109:33061/rtdw_meta?useSSL=false&serverTimezone=GMT%2B8&characterEncoding=utf8
+    username: root
+    password: H5*ajAXVhT
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
 
 # 开发环境Spark配置
 spark:
@@ -92,6 +166,19 @@ spring:
   config:
     activate:
       on-profile: prod
+  
+  # 生产环境数据源配置
+  datasource:
+    jdbc-url: jdbc:mysql://your-prod-host:3306/hoodie_meta?useSSL=false&serverTimezone=GMT%2B8&characterEncoding=utf8
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:your_password}
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 60000
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
 
 # 生产环境Spark配置
 spark:
