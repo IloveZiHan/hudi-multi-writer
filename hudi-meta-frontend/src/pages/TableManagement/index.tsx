@@ -152,13 +152,17 @@ const TableManagement: React.FC = () => {
       title: '表ID',
       dataIndex: 'id',
       key: 'id',
-      width: 200,
+      width: 280,
       fixed: 'left',
+      ellipsis: {
+        showTitle: true,
+      },
       render: (text: string, record: MetaTableDTO) => (
         <Button
           type="link"
           size="small"
           onClick={() => handleViewDetail(record)}
+          style={{ textAlign: 'left', padding: 0 }}
         >
           {text}
         </Button>
@@ -169,11 +173,33 @@ const TableManagement: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: number) => (
-        <Tag color={TableStatusColors[status as TableStatus]}>
-          {TableStatusLabels[status as TableStatus]}
-        </Tag>
-      ),
+      render: (status: number) => {
+        let color = '#d9d9d9'; // 默认灰色
+        let text = '未上线';
+        
+        if (status === TableStatus.ONLINE) {
+          color = '#52c41a'; // 绿色
+          text = '已上线';
+        } else if (status === TableStatus.DELETED) {
+          color = '#ff4d4f'; // 红色
+          text = '已删除';
+        }
+        
+        return (
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: color,
+                marginRight: 8,
+              }}
+            />
+            <span>{text}</span>
+          </div>
+        );
+      },
     },
     {
       title: '分区',
@@ -181,10 +207,18 @@ const TableManagement: React.FC = () => {
       key: 'isPartitioned',
       width: 80,
       render: (isPartitioned: boolean) => (
-        <Badge
-          status={isPartitioned ? 'success' : 'default'}
-          text={isPartitioned ? '是' : '否'}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {isPartitioned ? (
+            <Tag color="blue" style={{ margin: 0 }}>
+              <DatabaseOutlined style={{ marginRight: 4 }} />
+              分区
+            </Tag>
+          ) : (
+            <Tag color="default" style={{ margin: 0 }}>
+              普通
+            </Tag>
+          )}
+        </div>
       ),
     },
     {
@@ -192,18 +226,27 @@ const TableManagement: React.FC = () => {
       dataIndex: 'sourceDb',
       key: 'sourceDb',
       width: 120,
+      ellipsis: {
+        showTitle: true,
+      },
     },
     {
       title: '源表',
       dataIndex: 'sourceTable',
       key: 'sourceTable',
       width: 150,
+      ellipsis: {
+        showTitle: true,
+      },
     },
     {
       title: '标签',
       dataIndex: 'tags',
       key: 'tags',
       width: 150,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (tags: string) => {
         if (!tags) return '-';
         return tags.split(',').map(tag => (
@@ -218,6 +261,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'createdTime',
       key: 'createdTime',
       width: 160,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
     },
     {
@@ -225,6 +271,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'updatedTime',
       key: 'updatedTime',
       width: 160,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (time: string) => dayjs(time).format('YYYY-MM-DD HH:mm:ss'),
     },
     {
@@ -282,8 +331,11 @@ const TableManagement: React.FC = () => {
       title: '表ID',
       dataIndex: 'id',
       key: 'id',
-      width: 200,
+      width: 280,
       fixed: 'left',
+      ellipsis: {
+        showTitle: true,
+      },
       render: (text: string, record: MetaTableDTO) => (
         <Button
           type="link"
@@ -292,7 +344,9 @@ const TableManagement: React.FC = () => {
           style={{ 
             textDecoration: 'line-through', 
             color: '#ff4d4f',
-            opacity: 0.7 
+            opacity: 0.7,
+            textAlign: 'left',
+            padding: 0
           }}
         >
           {text}
@@ -305,9 +359,19 @@ const TableManagement: React.FC = () => {
       key: 'status',
       width: 100,
       render: (status: number) => (
-        <Tag color="red" style={{ opacity: 0.8 }}>
-          已删除
-        </Tag>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: '#ff4d4f',
+              marginRight: 8,
+              opacity: 0.8,
+            }}
+          />
+          <span style={{ color: '#ff4d4f', opacity: 0.8 }}>已删除</span>
+        </div>
       ),
     },
     {
@@ -316,11 +380,18 @@ const TableManagement: React.FC = () => {
       key: 'isPartitioned',
       width: 80,
       render: (isPartitioned: boolean) => (
-        <Badge
-          status={isPartitioned ? 'success' : 'default'}
-          text={isPartitioned ? '是' : '否'}
-          style={{ opacity: 0.7 }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {isPartitioned ? (
+            <Tag color="blue" style={{ margin: 0, opacity: 0.7 }}>
+              <DatabaseOutlined style={{ marginRight: 4 }} />
+              分区
+            </Tag>
+          ) : (
+            <Tag color="default" style={{ margin: 0, opacity: 0.7 }}>
+              普通
+            </Tag>
+          )}
+        </div>
       ),
     },
     {
@@ -328,6 +399,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'sourceDb',
       key: 'sourceDb',
       width: 120,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (text: string) => (
         <span style={{ 
           textDecoration: 'line-through', 
@@ -343,6 +417,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'sourceTable',
       key: 'sourceTable',
       width: 150,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (text: string) => (
         <span style={{ 
           textDecoration: 'line-through', 
@@ -358,6 +435,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'tags',
       key: 'tags',
       width: 150,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (tags: string) => {
         if (!tags) return <span style={{ opacity: 0.7 }}>-</span>;
         return tags.split(',').map(tag => (
@@ -372,6 +452,9 @@ const TableManagement: React.FC = () => {
       dataIndex: 'updatedTime',
       key: 'updatedTime',
       width: 160,
+      ellipsis: {
+        showTitle: true,
+      },
       render: (time: string) => (
         <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
           {dayjs(time).format('YYYY-MM-DD HH:mm:ss')}

@@ -35,6 +35,7 @@ export interface MetaTableDTO {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  hoodieConfig?: string; // Hoodie配置JSON字符串
   createdTime: string;
   updatedTime: string;
   creator?: string;
@@ -56,6 +57,7 @@ export interface CreateTableRequest {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  hoodieConfig?: string; // Hoodie配置JSON字符串
 }
 
 /**
@@ -72,6 +74,7 @@ export interface UpdateTableRequest {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  hoodieConfig?: string; // Hoodie配置JSON字符串
 }
 
 /**
