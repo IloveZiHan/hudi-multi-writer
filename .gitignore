@@ -30,3 +30,4 @@ replay_pid*
 /hudi-meta-web/target/
 /hudi-meta-frontend/node_modules/
 /.idea/
+/logs/

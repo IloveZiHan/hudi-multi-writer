@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
+    </Properties>
+    
+    <Appenders>
+        <!-- 控制台输出 -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </Console>
+        
+        <!-- 文件输出 -->
+        <File name="TestLogFile" fileName="logs/test-${date:yyyy-MM-dd}.log">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </File>
+    </Appenders>
+    
+    <Loggers>
+        <!-- 测试相关的日志 -->
+        <Logger name="cn.com.multi_writer.meta" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="TestLogFile"/>
+        </Logger>
+        
+        <!-- Spark相关日志 -->
+        <Logger name="org.apache.spark" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Hadoop相关日志 -->
+        <Logger name="org.apache.hadoop" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- Hive相关日志 -->
+        <Logger name="org.apache.hive" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- H2数据库日志 -->
+        <Logger name="org.h2" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- JDBC相关日志 -->
+        <Logger name="java.sql" level="WARN" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- ScalaTest日志 -->
+        <Logger name="org.scalatest" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        
+        <!-- 根日志器 -->
+        <Root level="WARN">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration> 

@@ -1,40 +1,15 @@
 package cn.com.multi_writer
 
 import cn.com.multi_writer.etl.{DataCleaner, TdsqlBatchProcessor}
-import cn.com.multi_writer.sink.{HudiWriter, HudiConcurrentWriter, HudiConcurrentWriterConfig, WriteTask}
+import cn.com.multi_writer.meta.{MetaTableManager, MetaTableManagerFactory, TableConfig}
+import cn.com.multi_writer.sink.{HudiConcurrentWriter, HudiConcurrentWriterConfig, HudiWriter, WriteTask}
 import cn.com.multi_writer.source.KafkaSource
-import cn.com.multi_writer.util.SparkJobStatusManager
-import cn.com.multi_writer.meta.{MetaHudiTableManager, TableConfig}
-import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.sql.types._
 import org.slf4j.{Logger, LoggerFactory}
 
-import java.sql.Timestamp
 
-/**
- * 优化后的TdSQL CDC 流处理作业示例
- *
- * 主要优化点：
- * 1. 使用MetaHudiTableManager.queryTablesByStatus动态获取表配置
- * 2. 在每次processBatch中都获取最新的表信息，支持表配置的动态更新
- * 3. 移除静态的tableConfigs，改为动态获取
- * 4. 支持通过元数据表管理表的上线/下线状态
- * 5. 使用TableConfig样例类替换复杂的元组类型，提高代码可读性
- * 6. 【新增】使用HudiConcurrentWriter实现并发写入，显著提升性能
- * 7. 【新增】支持可配置的并发写入参数，灵活控制并发数和超时时间
- * 8. 【新增】提供详细的写入结果统计和错误处理
- * 9. 【性能优化】HudiConcurrentWriter全局模式，避免频繁创建/销毁线程池
- *
- * 配置参数说明：
- * - spark.meta.table.path: 元数据表路径 (默认: /tmp/hudi_tables/meta_hudi_table)
- * - spark.hudi.base.path: Hudi表基础路径 (默认: /tmp/hudi_tables)
- * - spark.debug.show.data: 是否显示调试数据 (默认: false)
- * - spark.hudi.concurrent.max: 最大并发写入数 (默认: 3)
- * - spark.hudi.concurrent.timeout: 并发写入超时时间（秒）(默认: 600)
- * - spark.hudi.concurrent.failfast: 是否快速失败 (默认: true)
- */
 object TdsqlCdcStreamJob {
 
     private val logger: Logger = LoggerFactory.getLogger(TdsqlCdcStreamJob.getClass)
@@ -50,9 +25,15 @@ object TdsqlCdcStreamJob {
 
         try {
             logger.info("=== 优化后的TdSQL CDC Stream Job启动（全局并发写入器模式） ===")
+            // 获取配置
+            val configs = SparkSessionManager.getStreamingConfigs(spark)
+            // 获取mysql url, user, password
+            val mysqlUrl = configs("mysqlUrl")
+            val mysqlUser = configs("mysqlUser")
+            val mysqlPassword = configs("mysqlPassword")
 
             // 创建相关实例
-            val metaManager = new MetaHudiTableManager(spark)
+            val metaManager = MetaTableManagerFactory.createMySQLMetaTableManager(spark, mysqlUrl, mysqlUser, mysqlPassword)
             val kafkaSource = new KafkaSource(spark)
             val batchProcessor = new TdsqlBatchProcessor(spark)
             val dataCleaner = new DataCleaner(spark)
@@ -118,13 +99,12 @@ object TdsqlCdcStreamJob {
                             batchId: Long,
                             batchProcessor: TdsqlBatchProcessor,
                             dataCleaner: DataCleaner,
-                            metaManager: MetaHudiTableManager): Unit = {
+                            metaManager: MetaTableManager): Unit = {
         
         val startTime = System.currentTimeMillis()
         logger.info(s"========== 处理批次 $batchId (全局并发写入器模式) ==========")
 
         val configs = SparkSessionManager.getStreamingConfigs(spark)
-        val metaTablePath = configs("metaTablePath")
 
         if (batchDF.isEmpty) {
             logger.info("本批次无数据")
@@ -154,7 +134,8 @@ object TdsqlCdcStreamJob {
             logger.info(s"使用全局并发写入器 - ${concurrentWriter.getPoolStats}")
 
             // 获取动态表配置
-            val dynamicTableConfigs = getDynamicTableConfigs(metaManager, metaTablePath)
+            val applicationName = configs("applicationName")
+            val dynamicTableConfigs = getDynamicTableConfigs(metaManager, applicationName)
             
             if (dynamicTableConfigs.isEmpty) {
                 logger.info("未找到已上线的表配置，跳过本批次处理")
@@ -205,15 +186,14 @@ object TdsqlCdcStreamJob {
                      , batchId: Long
                      , batchProcessor: TdsqlBatchProcessor
                      , dataCleaner: DataCleaner
-                     , metaManager: MetaHudiTableManager
+                     , metaManager: MetaTableManager
                      , concurrentWriterConfig: HudiConcurrentWriterConfig): Unit = {
         
         val startTime = System.currentTimeMillis()
         logger.info(s"========== 处理批次 $batchId (动态表配置) ==========")
         logger.warn("使用已弃用的processBatch方法，建议使用processBatchOptimized获得更好的性能")
 
-        val configs = SparkSessionManager.getStreamingConfigs(spark)
-        val metaTablePath = configs("metaTablePath")
+        val configs = SparkSessionManager.getStreamingConfigs(spark)   
 
         if (batchDF.isEmpty) {
             logger.info("本批次无数据")
@@ -222,7 +202,8 @@ object TdsqlCdcStreamJob {
         
         try {
             // 第一步：从元数据表获取最新的已上线表配置
-            val dynamicTableConfigs = getDynamicTableConfigs(metaManager, metaTablePath)
+            val applicationName = configs("applicationName")
+            val dynamicTableConfigs = getDynamicTableConfigs(metaManager, applicationName)
             
             if (dynamicTableConfigs.isEmpty) {
                 logger.info("未找到已上线的表配置，跳过本批次处理")
@@ -295,12 +276,10 @@ object TdsqlCdcStreamJob {
     /**
      * 从元数据表动态获取表配置信息
      */
-    def getDynamicTableConfigs(metaManager: MetaHudiTableManager, metaTablePath: String): Seq[TableConfig] = {
+    def getDynamicTableConfigs(metaManager: MetaTableManager, applicationName: String): Seq[TableConfig] = {
         try {
-            logger.info(s"正在从元数据表获取已上线表配置: $metaTablePath")
-            
             // 查询状态为1（已上线）的表
-            val onlineTablesDF = metaManager.queryTablesByStatus(1, metaTablePath)
+            val onlineTablesDF = metaManager.queryTablesByApplicationName(applicationName)
             
             if (onlineTablesDF.isEmpty) {
                 logger.info("元数据表中没有已上线的表")
@@ -314,7 +293,7 @@ object TdsqlCdcStreamJob {
             val tableConfigs = onlineTables.map { row =>
                 val id = row.getAs[String]("id")
                 val schemaJson = row.getAs[String]("schema")
-                val status = row.getAs[Int]("status")
+                val status = row.getAs[Boolean]("status")
                 val isPartitioned = row.getAs[Boolean]("is_partitioned")
                 val partitionExpr = row.getAs[String]("partition_expr")
                 val hoodieConfig = row.getAs[String]("hoodie_config")

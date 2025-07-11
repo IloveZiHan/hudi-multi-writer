@@ -12,19 +12,7 @@ import org.slf4j.{Logger, LoggerFactory}
  * 与 MetaHudiTableManager 中的 meta_hudi_table DDL 保持一致
  * 包含了元数据表的所有字段定义
  */
-case class TableConfig(
-                          id: String,
-                          fieldMapping: Seq[(String, DataType)],
-                          status: Int,
-                          isPartitioned: Boolean,
-                          tags: Option[String] = None,
-                          description: Option[String] = None,
-                          sourceDb: Option[String] = None,
-                          sourceTable: Option[String] = None,
-                          dbType: Option[String] = None,
-                          partitionExpr: Option[String] = None,
-                          hoodieConfig: Option[String] = None
-                      ) {
+case class TableConfig(id: String, fieldMapping: Seq[(String, DataType)], status: Boolean, isPartitioned: Boolean, tags: Option[String] = None, description: Option[String] = None, sourceDb: Option[String] = None, sourceTable: Option[String] = None, dbType: Option[String] = None, partitionExpr: Option[String] = None, hoodieConfig: Option[String] = None) {
     
     // 创建logger实例
     private val logger: Logger = LoggerFactory.getLogger(classOf[TableConfig])
@@ -33,15 +21,6 @@ case class TableConfig(
      * 获取表标识符
      */
     def tableId: String = id
-
-    /**
-     * 获取表状态描述
-     */
-    def statusDescription: String = status match {
-        case 0 => "未上线"
-        case 1 => "已上线"
-        case _ => "未知状态"
-    }
 
     /**
      * 获取分区类型描述
@@ -111,7 +90,7 @@ case class TableConfig(
      */
     def printInfo(): Unit = {
         logger.info(s"表ID: $id")
-        logger.info(s"状态: $statusDescription")
+        logger.info(s"状态: $status")
         logger.info(s"分区类型: $partitionTypeDescription")
         logger.info(s"源表: ${fullSourceTableName.getOrElse("N/A")}")
         logger.info(s"数据库类型: ${dbType.getOrElse("N/A")}")

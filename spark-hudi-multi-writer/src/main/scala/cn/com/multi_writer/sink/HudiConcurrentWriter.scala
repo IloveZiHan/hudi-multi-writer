@@ -142,14 +142,7 @@ class WriteTaskExecutor(spark: SparkSession) {
                 .format("hudi")
                 .options(task.options)
                 .mode("append")
-
-            // 应用额外的配置选项
-            val finalWriter = task.options.foldLeft(writer) { case (w, (key, value)) =>
-                w.option(key, value)
-            }
-
-            // 执行写入
-            finalWriter.save(task.hudiTablePath)
+                .save(task.hudiTablePath)
 
             val executionTime = System.currentTimeMillis() - startTime
             logger.info(s"写入任务执行成功: ${task.taskId} - ${task.hudiTableName}, 耗时: ${executionTime}ms")

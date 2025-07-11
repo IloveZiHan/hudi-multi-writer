@@ -15,6 +15,7 @@ object SparkSessionManager {
 
   // 定义系统默认配置值，用于判断用户是否修改了配置
   private val DEFAULT_CONFIGS = Map(
+    "spark.application.name" -> "hudi-cdc-stream-job",
     "spark.kafka.bootstrap.servers" -> "10.94.162.31:9092",
     "spark.kafka.topic" -> "rtdw_tdsql_alc", 
     "spark.shuffle_partition.records" -> "100000",
@@ -25,7 +26,10 @@ object SparkSessionManager {
     "spark.sql.streaming.checkpointLocation" -> "/tmp/spark-checkpoint",
     "spark.meta.table.path" -> "/tmp/spark-warehouse/meta_hudi_table",
     "spark.sql.warehouse.dir" -> "file:///tmp/spark-warehouse",
-    "spark.hive.metastore.uris" -> "thrift://huoshan-test04:9083,thrift://huoshan-test03:9083,thrift://huoshan-test05:9083"
+    "spark.hive.metastore.uris" -> "thrift://huoshan-test04:9083,thrift://huoshan-test03:9083,thrift://huoshan-test05:9083",
+    "spark.mysql.url" -> "jdbc:mysql://10.94.158.109:33061/rtdw_meta",
+    "spark.mysql.user" -> "root",
+    "spark.mysql.password" -> "H5*ajAXVhT"
   )
 
   /**
@@ -77,6 +81,7 @@ object SparkSessionManager {
    */
   def getStreamingConfigs(spark: SparkSession): Map[String, String] = {
     Map(
+      "applicationName" -> spark.conf.get("spark.application.name", DEFAULT_CONFIGS("spark.application.name")),
       "kafkaBrokers" -> spark.conf.get("spark.kafka.bootstrap.servers", DEFAULT_CONFIGS("spark.kafka.bootstrap.servers")),
       "kafkaTopic" -> spark.conf.get("spark.kafka.topic", DEFAULT_CONFIGS("spark.kafka.topic")),
       "recordsPerPartition" -> spark.conf.get("spark.shuffle_partition.records", DEFAULT_CONFIGS("spark.shuffle_partition.records")),
@@ -87,7 +92,10 @@ object SparkSessionManager {
       "checkpointLocation" -> spark.conf.get("spark.sql.streaming.checkpointLocation", DEFAULT_CONFIGS("spark.sql.streaming.checkpointLocation")),
       "metaTablePath" -> spark.conf.get("spark.meta.table.path", DEFAULT_CONFIGS("spark.meta.table.path")),
       "hudiBasePath" -> spark.conf.get("spark.sql.warehouse.dir",DEFAULT_CONFIGS("spark.sql.warehouse.dir")),
-      "hmsServerAddress" -> spark.conf.get("spark.hive.metastore.uris",DEFAULT_CONFIGS("spark.hive.metastore.uris"))
+      "hmsServerAddress" -> spark.conf.get("spark.hive.metastore.uris",DEFAULT_CONFIGS("spark.hive.metastore.uris")),
+      "mysqlUrl" -> spark.conf.get("spark.mysql.url",DEFAULT_CONFIGS("spark.mysql.url")),
+      "mysqlUser" -> spark.conf.get("spark.mysql.user",DEFAULT_CONFIGS("spark.mysql.user")),
+      "mysqlPassword" -> spark.conf.get("spark.mysql.password",DEFAULT_CONFIGS("spark.mysql.password")) 
     )
   }
 

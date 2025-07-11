@@ -5,182 +5,200 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 继承父项目 -->
-    <parent>
-        <groupId>pin</groupId>
-        <artifactId>hudi-multi-writer-parent</artifactId>
-        <version>1.0.0</version>
-        <relativePath>../pom.xml</relativePath>
-    </parent>
-
+    <groupId>pin</groupId>
     <artifactId>spark-hudi-multi-writer</artifactId>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>Spark Hudi Multi Writer</name>
     <description>Kafka数据通过Spark Structured Streaming写入Hudi</description>
+
+    <!-- 版本属性管理 -->
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <scala.version>2.12.18</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        
+        <!-- 大数据组件版本 -->
+        <spark.version>3.5.0</spark.version>
+        <hadoop.version>3.3.6</hadoop.version>
+        <hive.version>3.1.3</hive.version>
+        <hudi.version>0.15.0</hudi.version>
+        <kafka.version>2.8.2</kafka.version>
+        <!-- 添加Avro版本管理，确保与Spark 3.5.0和Hudi 0.15.0兼容 -->
+        <avro.version>1.11.2</avro.version>
+        
+        <!-- 工具库版本 -->
+        <fastjson.version>1.2.83</fastjson.version>
+        <mysql.version>8.0.33</mysql.version>
+        <log4j.version>2.20.0</log4j.version>
+        <slf4j.version>1.7.36</slf4j.version>
+        
+        <!-- 测试依赖版本 -->
+        <junit.version>4.13.2</junit.version>
+        <scalatest.version>3.2.17</scalatest.version>
+        <h2.version>2.2.224</h2.version>
+        
+        <!-- JSON依赖版本 -->
+        <jackson.version>2.15.2</jackson.version>
+        
+        <!-- Maven插件版本 -->
+        <maven.shade.version>3.5.1</maven.shade.version>
+        <scala.maven.version>4.8.1</scala.maven.version>
+        <maven.compiler.version>3.11.0</maven.compiler.version>
+        <maven.surefire.version>3.2.2</maven.surefire.version>
+    </properties>
 
     <dependencies>
         <!-- Spark核心依赖 -->
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_${scala.binary.version}</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${spark.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_${scala.binary.version}</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${spark.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-streaming_${scala.binary.version}</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${spark.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql-kafka-0-10_${scala.binary.version}</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${spark.version}</version>
         </dependency>
 
         <!-- Hudi依赖 -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-spark3.5-bundle_${scala.binary.version}</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${hudi.version}</version>
+        </dependency>
+
+        <!-- 明确添加Avro依赖，确保版本一致性 -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>${avro.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro-mapred</artifactId>
+            <version>${avro.version}</version>
         </dependency>
 
         <!-- Hadoop依赖 -->
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-client</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${hadoop.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${hadoop.version}</version>
         </dependency>
 
         <!-- Hive依赖 -->
         <dependency>
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-exec</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${hive.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.hive</groupId>
             <artifactId>hive-metastore</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.slf4j</groupId>
-                    <artifactId>slf4j-reload4j</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>${hive.version}</version>
         </dependency>
 
         <!-- Kafka依赖 -->
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
+            <version>${kafka.version}</version>
         </dependency>
 
         <!-- 工具库依赖 -->
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
+            <version>${fastjson.version}</version>
         </dependency>
         <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
         </dependency>
         
         <!-- Jackson依赖，解决StreamReadConstraints类缺失问题 -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.module</groupId>
             <artifactId>jackson-module-scala_${scala.binary.version}</artifactId>
+            <version>${jackson.version}</version>
         </dependency>
 
         <!-- 日志依赖 -->
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j-impl</artifactId>
+            <version>${log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
         </dependency>
 
         <!-- Scala依赖 -->
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
+            <version>${scala.version}</version>
         </dependency>
 
         <!-- 测试依赖 -->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.scalatest</groupId>
             <artifactId>scalatest_${scala.binary.version}</artifactId>
+            <version>${scalatest.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>${h2.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -191,24 +209,66 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven.compiler.version}</version>
+                <configuration>
+                    <source>${maven.compiler.source}</source>
+                    <target>${maven.compiler.target}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
             </plugin>
 
             <!-- Scala编译插件 -->
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
+                <version>${scala.maven.version}</version>
+                <configuration>
+                    <scalaVersion>${scala.version}</scalaVersion>
+                    <recompileMode>incremental</recompileMode>
+                    <args>
+                        <arg>-deprecation</arg>
+                        <arg>-feature</arg>
+                        <arg>-unchecked</arg>
+                    </args>
+                    <javacArgs>
+                        <javacArg>-source</javacArg>
+                        <javacArg>${maven.compiler.source}</javacArg>
+                        <javacArg>-target</javacArg>
+                        <javacArg>${maven.compiler.target}</javacArg>
+                    </javacArgs>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>scala-compile-first</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>scala-test-compile</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
 
             <!-- Shade打包插件 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven.shade.version}</version>
                 <configuration>
                     <finalName>${project.artifactId}-${project.version}-fat</finalName>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                             <mainClass>cn.com.multi_writer.TdsqlCdcStreamJob</mainClass>
                         </transformer>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                     </transformers>
                     <filters>
                         <filter>
@@ -236,6 +296,14 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+                <configuration>
+                    <skipTests>false</skipTests>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Suite.scala</include>
+                    </includes>
+                </configuration>
             </plugin>
         </plugins>
     </build>
