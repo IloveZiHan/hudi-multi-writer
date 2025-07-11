@@ -195,4 +195,10 @@ public interface MetaTableService {
      */
     boolean restoreTable(String id);    
     
+    /**
+     * 永久删除表
+     * @param id 表ID
+     * @return 永久删除结果
+     */
+    boolean permanentDelete(String id);
 } 

@@ -411,6 +411,8 @@ public class MySQLMetaTableServiceImpl implements MetaTableService {
                 return batchOfflineTables(request.getIds());
             case "export":
                 return exportTables(request.getIds());
+            case "permanent-delete":
+                return batchPermanentDeleteTables(request.getIds());
             default:
                 throw new IllegalArgumentException("不支持的批量操作类型: " + request.getOperation());
         }
@@ -730,6 +732,10 @@ public class MySQLMetaTableServiceImpl implements MetaTableService {
         }
     }
 
+    private BatchOperationResult batchPermanentDeleteTables(List<String> ids) {
+        return batchUpdateOperation(ids, "PERMANENT_DELETE", "DELETE FROM `" + HOODIE_META_TABLE + "` WHERE `id` = ?");
+    }
+
     @Override
     public Object getSystemTableStats() {
         // 获取mysql数据库下的所有表的统计信息
@@ -764,4 +770,23 @@ public class MySQLMetaTableServiceImpl implements MetaTableService {
         }
         return true;
     }
+
+    @Override
+    public boolean permanentDelete(String id) {
+        // 永久删除表的具体实现
+        logger.info("永久删除表: {}", id);
+        try {
+            String sql = "DELETE FROM `" + HOODIE_META_TABLE + "` WHERE `id` = ?";
+            try (Connection connection = getConnection(); PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, id);
+                int result = pstmt.executeUpdate();
+            }
+        } catch (SQLException e) {
+            logger.error("永久删除表失败: {}", id, e);
+            throw new RuntimeException("永久删除表失败: " + e.getMessage(), e);
+        }
+        return true;
+    }
+
+
 } 

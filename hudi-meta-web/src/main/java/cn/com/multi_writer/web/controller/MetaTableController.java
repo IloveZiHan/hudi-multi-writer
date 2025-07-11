@@ -556,4 +556,10 @@ public class MetaTableController {
         logger.info("获取系统表统计信息");
         return ApiResponse.success(metaTableService.getSystemTableStats());
     }
+
+    @DeleteMapping("/{id}/permanent")
+    public ApiResponse<Boolean> permanentDelete(@PathVariable @NotBlank String id) {
+        logger.info("永久删除某个表: {}", id);
+        return ApiResponse.success(metaTableService.permanentDelete(id));
+    }
 } 
