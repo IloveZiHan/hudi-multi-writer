@@ -52,6 +52,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('basic'); // 当前活动Tab
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['basic'])); // 已访问的选项卡，默认包含基本信息
   const [isPartitioned, setIsPartitioned] = useState(true); // 默认设置为true
   const [schemaEditMode, setSchemaEditMode] = useState<'visual' | 'text'>('text'); // 表结构编辑模式
   const [schemaValue, setSchemaValue] = useState(''); // 表结构值
@@ -66,6 +67,42 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const [hoodieConfigValue, setHoodieConfigValue] = useState(''); // Hoodie配置值
   const [hoodieConfigFields, setHoodieConfigFields] = useState<any[]>([]); // 可视化编辑的配置数据
   const [editingHoodieConfigKey, setEditingHoodieConfigKey] = useState<string>(''); // 正在编辑的配置key
+
+  // 所有选项卡的顺序
+  const allTabs = ['basic', 'schema', 'hoodieConfig', 'other'];
+  
+  // 选项卡中文名称映射
+  const tabNames: Record<string, string> = {
+    basic: '基本信息',
+    schema: '表结构',
+    hoodieConfig: 'Hoodie配置',
+    other: '其他信息'
+  };
+
+  // 处理选项卡切换
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    setVisitedTabs(prev => new Set([...prev, key]));
+  };
+
+  // 检查是否所有选项卡都已访问
+  const isAllTabsVisited = () => {
+    return allTabs.every(tab => visitedTabs.has(tab));
+  };
+
+  // 获取下一个选项卡
+  const getNextTab = () => {
+    const currentIndex = allTabs.indexOf(activeTab);
+    return currentIndex < allTabs.length - 1 ? allTabs[currentIndex + 1] : null;
+  };
+
+  // 处理下一步按钮点击
+  const handleNextStep = () => {
+    const nextTab = getNextTab();
+    if (nextTab) {
+      handleTabChange(nextTab);
+    }
+  };
 
   // 分区表达式预设选项
   const partitionOptions = [
@@ -92,51 +129,34 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
       console.log('CreateTableModal 接收到的导入数据:', importData);
       console.log('导入的 hoodieConfig:', importData.hoodieConfig);
       
-      // 设置schema相关状态，并将字段名转换为小写
+      // 设置页签状态，确保显示基本信息页签
+      setActiveTab('basic');
+      setVisitedTabs(new Set(['basic']));
+      
+      // 设置schema相关状态，并将字段名转换为小写，确保包含nullable字段
       let schemaToUse = importData.schema;
       try {
         const parsedSchema = JSON.parse(importData.schema);
         if (parsedSchema.type === 'struct' && parsedSchema.fields) {
           parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
             ...field,
-            name: field.name.toLowerCase()
+            name: field.name.toLowerCase(),
+            nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
           }));
           schemaToUse = JSON.stringify(parsedSchema, null, 2);
         }
       } catch (error) {
         console.error('转换导入schema字段名失败:', error);
       }
-      setSchemaValue(schemaToUse);
-      
-      // 设置表单字段值
-      form.setFieldsValue({
-        id: importData.tableId.toLowerCase(), // 转换为小写
-        schema: schemaToUse, // 使用转换后的schema
-        dbType: importData.dbType.toLowerCase(), // 转换为小写
-        sourceDb: importData.sourceDb.toLowerCase(), // 转换为小写
-        sourceTable: importData.sourceTable.toLowerCase(), // 转换为小写
-        // 设置其他默认值
-        status: 1, // 已上线
-        isPartitioned: true,
-        partitionExpr: 'dt', // 默认分区字段
-        description: `从业务表 ${importData.sourceDb.toLowerCase()}.${importData.sourceTable.toLowerCase()} 导入`,
-        // 使用导入数据中的hoodie配置
-        hoodieConfig: importData.hoodieConfig || JSON.stringify({
-          'hoodie.table.type': 'COPY_ON_WRITE',
-          'hoodie.database.name': importData.sourceDb.toLowerCase(),
-          'hoodie.table.name': importData.sourceTable.toLowerCase(),
-        }, null, 2),
-      });
       
       // 解析导入的字段到可视化编辑器
       const visualFields = importData.fields.map((field, index) => ({
         key: index.toString(),
         name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
         type: field.type,
-        nullable: field.nullable,
+        nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
         comment: field.comment,
       }));
-      setSchemaFields(visualFields);
       
       // 使用导入数据中的hoodie配置
       let hoodieConfigToUse = importData.hoodieConfig;
@@ -146,22 +166,66 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         const defaultHoodieConfig = {
           'hoodie.table.type': 'COPY_ON_WRITE',
           'hoodie.database.name': importData.sourceDb.toLowerCase(),
-          'hoodie.table.name': importData.sourceTable.toLowerCase(),
+          'hoodie.table.name': importData.tableId.toLowerCase(), // 使用表ID作为表名
         };
         hoodieConfigToUse = JSON.stringify(defaultHoodieConfig, null, 2);
+      } else {
+        // 如果有hoodie配置，确保hoodie.table.name被设置为表ID
+        try {
+          const parsedHoodieConfig = JSON.parse(hoodieConfigToUse);
+          parsedHoodieConfig['hoodie.table.name'] = importData.tableId.toLowerCase();
+          hoodieConfigToUse = JSON.stringify(parsedHoodieConfig, null, 2);
+          console.log('自动设置导入配置中的hoodie.table.name为:', importData.tableId.toLowerCase());
+        } catch (error) {
+          console.error('解析并设置hoodie.table.name失败:', error);
+        }
       }
       
       console.log('最终使用的 hoodieConfig:', hoodieConfigToUse);
-      setHoodieConfigValue(hoodieConfigToUse);
       
       // 解析hoodie配置到可视化编辑器
       const hoodieFields = parseHoodieConfig(hoodieConfigToUse);
       console.log('解析后的 hoodieFields:', hoodieFields);
-      setHoodieConfigFields(hoodieFields);
       
-      // 默认使用可视化编辑模式显示导入的字段
+      // 立即设置所有状态
+      setSchemaValue(schemaToUse);
+      setSchemaFields(visualFields);
+      setHoodieConfigValue(hoodieConfigToUse);
+      setHoodieConfigFields(hoodieFields);
       setSchemaEditMode('visual');
       setHoodieConfigEditMode('visual');
+      
+      // 立即设置表单字段值，确保隐藏字段有正确的值
+      const formValues = {
+        id: importData.tableId.toLowerCase(), // 转换为小写
+        schema: schemaToUse, // 使用转换后的schema
+        dbType: importData.dbType.toLowerCase(), // 转换为小写
+        sourceDb: importData.sourceDb.toLowerCase(), // 转换为小写
+        sourceTable: importData.sourceTable.toLowerCase(), // 转换为小写
+        // 设置其他默认值
+        status: 1, // 已上线
+        isPartitioned: true,
+        partitionExpr: "trunc(create_time, 'year')", // 默认使用按年分区
+        description: `从业务表 ${importData.sourceDb.toLowerCase()}.${importData.sourceTable.toLowerCase()} 导入`,
+        // 使用导入数据中的hoodie配置
+        hoodieConfig: hoodieConfigToUse,
+      };
+      
+      console.log('设置表单字段值:', formValues);
+      form.setFieldsValue(formValues);
+      
+      // 使用setTimeout确保表单渲染完成后再次设置，防止时机问题
+      setTimeout(() => {
+        console.log('延时设置表单字段值（确保渲染完成）');
+        form.setFieldsValue({
+          schema: schemaToUse,
+          hoodieConfig: hoodieConfigToUse,
+        });
+        
+        // 验证表单字段是否正确设置
+        const currentValues = form.getFieldsValue(['schema', 'hoodieConfig']);
+        console.log('延时设置后的表单值检查:', currentValues);
+      }, 100);
     }
   }, [visible, importData, form]);
 
@@ -170,6 +234,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     if (visible && !importData) {
       form.resetFields();
       setActiveTab('basic');
+      setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
       setSchemaValue('');
       setSchemaFields([]);
       setSchemaEditMode('text');
@@ -182,6 +247,48 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     }
   }, [visible, importData, form]);
 
+  // 当没有导入数据但有schema或hoodie配置时，初始化可视化数据
+  useEffect(() => {
+    if (visible && !importData) {
+      // 如果有schema值，解析为可视化字段
+      if (schemaValue) {
+        const fields = parseTableSchema(schemaValue);
+        setSchemaFields(fields);
+      }
+      
+      // 如果有hoodie配置值，解析为可视化字段
+      if (hoodieConfigValue) {
+        const hoodieFields = parseHoodieConfig(hoodieConfigValue);
+        setHoodieConfigFields(hoodieFields);
+      }
+    }
+  }, [visible, importData, schemaValue, hoodieConfigValue]);
+
+  // 当有导入数据且字段数据已设置时，确保表单字段始终同步（兜底机制）
+  useEffect(() => {
+    if (visible && importData) {
+      // 检查schema字段
+      if (schemaFields.length > 0) {
+        const schemaJson = fieldsToSchema(schemaFields);
+        const currentSchema = form.getFieldValue('schema');
+        if (!currentSchema || currentSchema !== schemaJson) {
+          console.log('兜底同步schema字段:', schemaJson);
+          form.setFieldsValue({ schema: schemaJson });
+        }
+      }
+      
+      // 检查hoodieConfig字段
+      if (hoodieConfigFields.length > 0) {
+        const configJson = fieldsToHoodieConfig(hoodieConfigFields);
+        const currentConfig = form.getFieldValue('hoodieConfig');
+        if (!currentConfig || currentConfig !== configJson) {
+          console.log('兜底同步hoodieConfig字段:', configJson);
+          form.setFieldsValue({ hoodieConfig: configJson });
+        }
+      }
+    }
+  }, [visible, importData, schemaFields, hoodieConfigFields, form]);
+
   // 解析表结构 JSON
   const parseTableSchema = (schema: string) => {
     try {
@@ -191,7 +298,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           key: index.toString(),
           name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
           type: field.type,
-          nullable: field.nullable,
+          nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
           comment: field.metadata?.comment || '',
         }));
       }
@@ -220,21 +327,119 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     }
   };
 
-  // 将字段数据转换为Schema JSON
-  const fieldsToSchema = (fields: any[]) => {
-    const schemaFields = fields.map((field) => ({
-      name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
-      type: field.type,
-      nullable: field.nullable,
-      metadata: {
-        comment: field.comment || '',
-      },
-    }));
-    
-    return JSON.stringify({
+  // 创建复杂类型的辅助函数
+  const createArrayType = (elementType: string, containsNull: boolean = true) => {
+    return {
+      type: 'array',
+      elementType: elementType,
+      containsNull: containsNull,
+    };
+  };
+
+  const createMapType = (keyType: string, valueType: string, valueContainsNull: boolean = true) => {
+    return {
+      type: 'map',
+      keyType: keyType,
+      valueType: valueType,
+      valueContainsNull: valueContainsNull,
+    };
+  };
+
+  const createStructType = (fields: any[]) => {
+    return {
       type: 'struct',
-      fields: schemaFields,
-    }, null, 2);
+      fields: fields,
+    };
+  };
+
+  // 验证和规范化Spark数据类型
+  const normalizeSparkDataType = (dataType: string): string => {
+    // 处理常见的类型别名和格式
+    const typeMap: Record<string, string> = {
+      'int': 'integer',
+      'bigint': 'long',
+      'varchar': 'string',
+      'text': 'string',
+      'datetime': 'timestamp',
+      'bool': 'boolean',
+      'float': 'float',
+      'double': 'double',
+      'decimal': 'decimal',
+      'timestamp_ltz': 'timestamp',
+    };
+
+    // 如果是简单类型映射
+    if (typeMap[dataType.toLowerCase()]) {
+      return typeMap[dataType.toLowerCase()];
+    }
+
+    // 处理decimal类型的格式：decimal(precision,scale)
+    const decimalMatch = dataType.match(/^decimal\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+    if (decimalMatch) {
+      return `decimal(${decimalMatch[1]},${decimalMatch[2]})`;
+    }
+
+    // 处理char和varchar类型
+    const charMatch = dataType.match(/^char\s*\(\s*(\d+)\s*\)$/i);
+    if (charMatch) {
+      return `char(${charMatch[1]})`;
+    }
+
+    const varcharMatch = dataType.match(/^varchar\s*\(\s*(\d+)\s*\)$/i);
+    if (varcharMatch) {
+      return `varchar(${varcharMatch[1]})`;
+    }
+
+    // 其他类型直接返回
+    return dataType;
+  };
+
+  // 将字段数据转换为Schema JSON - 确保与Spark DataType.fromJson兼容
+  const fieldsToSchema = (fields: any[]) => {
+    const sparkSchemaFields = fields.map((field) => {
+      // 处理复杂类型的解析
+      const processFieldType = (fieldType: string): any => {
+        if (typeof fieldType === 'string') {
+          // 检查是否是复杂类型的JSON表示
+          if (fieldType.startsWith('{') && fieldType.endsWith('}')) {
+            try {
+              return JSON.parse(fieldType);
+            } catch (e) {
+              // 如果解析失败，返回原始字符串
+              return normalizeSparkDataType(fieldType);
+            }
+          }
+          // 简单类型进行规范化
+          return normalizeSparkDataType(fieldType);
+        }
+        // 如果已经是对象，直接返回
+        return fieldType;
+      };
+
+      // 按照Spark DataType.parseStructField期望的字段顺序构建
+      // Spark会通过JSortedObject按字母顺序排序，所以最终顺序是：metadata, name, nullable, type
+      const fieldData: any = {
+        metadata: {},
+        name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
+        nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
+        type: processFieldType(field.type),
+      };
+      
+      // 添加comment到metadata中
+      if (field.comment && field.comment.trim() !== '') {
+        fieldData.metadata.comment = field.comment.trim();
+      }
+      
+      return fieldData;
+    });
+    
+    // 生成符合Spark期望格式的schema JSON
+    const schema = {
+      type: 'struct',
+      fields: sparkSchemaFields,
+    };
+    
+    return JSON.stringify(schema, null, 2);
   };
 
   // 将配置数据转换为Hoodie配置JSON
@@ -263,6 +468,45 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     const configJson = fieldsToHoodieConfig(fields);
     setHoodieConfigValue(configJson);
     form.setFieldsValue({ hoodieConfig: configJson });
+  };
+
+  // 处理表ID变化时自动更新hoodie.table.name
+  const handleTableIdChange = (tableId: string) => {
+    if (!tableId) return;
+    
+    const lowercaseTableId = tableId.toLowerCase();
+    
+    // 更新hoodie配置中的hoodie.table.name
+    if (hoodieConfigEditMode === 'visual' && hoodieConfigFields.length > 0) {
+      const updatedFields = hoodieConfigFields.map(field => {
+        if (field.configKey === 'hoodie.table.name') {
+          return { ...field, configValue: lowercaseTableId };
+        }
+        return field;
+      });
+      
+      // 如果没有找到hoodie.table.name配置，则添加一个
+      const hasTableName = updatedFields.some(field => field.configKey === 'hoodie.table.name');
+      if (!hasTableName) {
+        updatedFields.push({
+          key: Date.now().toString(),
+          configKey: 'hoodie.table.name',
+          configValue: lowercaseTableId,
+        });
+      }
+      
+      updateHoodieConfigFields(updatedFields);
+    } else if (hoodieConfigEditMode === 'text' && hoodieConfigValue) {
+      try {
+        const parsedConfig = JSON.parse(hoodieConfigValue);
+        parsedConfig['hoodie.table.name'] = lowercaseTableId;
+        const updatedConfigValue = JSON.stringify(parsedConfig, null, 2);
+        setHoodieConfigValue(updatedConfigValue);
+        form.setFieldsValue({ hoodieConfig: updatedConfigValue });
+      } catch (error) {
+        console.error('更新hoodie.table.name失败:', error);
+      }
+    }
   };
 
   // 添加新字段
@@ -330,7 +574,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           key: (Date.now() + index).toString(),
           name: fieldName,
           type: fieldType,
-          nullable: true,
+          nullable: true, // 批量录入时默认为可为空
           comment: fieldComment,
         };
       });
@@ -753,6 +997,13 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
             console.log('设置主键字段:', primaryKeysStr);
           }
           
+          // 自动设置hoodie.table.name为当前表ID
+          const currentTableId = form.getFieldValue('id');
+          if (currentTableId) {
+            parsedConfig['hoodie.table.name'] = currentTableId.toLowerCase();
+            console.log('自动设置hoodie.table.name:', currentTableId.toLowerCase());
+          }
+          
           // 更新配置数据
           const updatedData = JSON.stringify(parsedConfig, null, 2);
           
@@ -765,7 +1016,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           setHoodieConfigFields(fields);
           
           console.log('获取默认Hoodie配置成功', updatedData);
-          message.success('获取默认配置成功，已自动设置主键字段');
+          message.success('获取默认配置成功，已自动设置主键字段和表名');
         } catch (error) {
           console.error('解析默认Hoodie配置失败:', error);
           message.error('解析默认Hoodie配置失败');
@@ -797,7 +1048,95 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   // 处理表单提交
   const handleSubmit = async () => {
     try {
+      console.log('开始处理表单提交');
+      console.log('当前schemaEditMode:', schemaEditMode);
+      console.log('当前schemaFields:', schemaFields);
+      console.log('当前schemaValue:', schemaValue);
+      
+      // 在表单验证之前，确保schema字段是最新的
+      if (schemaEditMode === 'visual' && schemaFields.length > 0) {
+        const schemaJson = fieldsToSchema(schemaFields);
+        console.log('从可视化字段生成的schema:', schemaJson);
+        form.setFieldsValue({ schema: schemaJson });
+      } else if (schemaEditMode === 'text' && schemaValue) {
+        // 如果是文本编辑模式，确保使用当前的schemaValue
+        console.log('使用文本编辑模式的schema:', schemaValue);
+        form.setFieldsValue({ schema: schemaValue });
+      } else if (schemaValue) {
+        // 兜底：如果有schemaValue，使用它
+        console.log('使用兜底的schema:', schemaValue);
+        form.setFieldsValue({ schema: schemaValue });
+      }
+      
+      // 在表单验证之前，确保hoodieConfig字段是最新的
+      if (hoodieConfigEditMode === 'visual' && hoodieConfigFields.length > 0) {
+        const configJson = fieldsToHoodieConfig(hoodieConfigFields);
+        console.log('从可视化字段生成的hoodieConfig:', configJson);
+        form.setFieldsValue({ hoodieConfig: configJson });
+      } else if (hoodieConfigEditMode === 'text' && hoodieConfigValue) {
+        // 如果是文本编辑模式，确保使用当前的hoodieConfigValue
+        console.log('使用文本编辑模式的hoodieConfig:', hoodieConfigValue);
+        form.setFieldsValue({ hoodieConfig: hoodieConfigValue });
+      } else if (hoodieConfigValue) {
+        // 兜底：如果有hoodieConfigValue，使用它
+        console.log('使用兜底的hoodieConfig:', hoodieConfigValue);
+        form.setFieldsValue({ hoodieConfig: hoodieConfigValue });
+      }
+      
+      // 强制确保schema字段有值，防止表单验证失败
+      const currentFormValues = form.getFieldsValue();
+      if (!currentFormValues.schema) {
+        console.log('表单schema字段为空，强制设置值');
+        if (schemaFields.length > 0) {
+          const schemaJson = fieldsToSchema(schemaFields);
+          console.log('使用可视化字段生成schema:', schemaJson);
+          form.setFieldsValue({ schema: schemaJson });
+        } else if (schemaValue) {
+          console.log('使用schemaValue:', schemaValue);
+          form.setFieldsValue({ schema: schemaValue });
+        } else {
+          console.log('没有可用的schema数据，设置空的schema结构');
+          const emptySchema = JSON.stringify({ type: 'struct', fields: [] }, null, 2);
+          form.setFieldsValue({ schema: emptySchema });
+        }
+      }
+      
+      // 强制确保hoodieConfig字段有值
+      if (!currentFormValues.hoodieConfig) {
+        console.log('表单hoodieConfig字段为空，强制设置值');
+        if (hoodieConfigFields.length > 0) {
+          const configJson = fieldsToHoodieConfig(hoodieConfigFields);
+          console.log('使用可视化字段生成hoodieConfig:', configJson);
+          form.setFieldsValue({ hoodieConfig: configJson });
+        } else if (hoodieConfigValue) {
+          console.log('使用hoodieConfigValue:', hoodieConfigValue);
+          form.setFieldsValue({ hoodieConfig: hoodieConfigValue });
+        } else {
+          console.log('没有可用的hoodieConfig数据，设置空对象');
+          form.setFieldsValue({ hoodieConfig: '{}' });
+        }
+      }
+      
+      // 终极兜底机制：如果导入数据存在且表单字段仍然为空，直接使用导入数据
+      if (importData) {
+        const finalFormValues = form.getFieldsValue();
+        console.log('检查终极兜底机制，当前表单值:', finalFormValues);
+        
+        if (!finalFormValues.schema && importData.schema) {
+          console.log('终极兜底：使用importData的schema');
+          form.setFieldsValue({ schema: importData.schema });
+        }
+        
+        if (!finalFormValues.hoodieConfig && importData.hoodieConfig) {
+          console.log('终极兜底：使用importData的hoodieConfig');
+          form.setFieldsValue({ hoodieConfig: importData.hoodieConfig });
+        }
+      }
+      
+      console.log('强制设置后的表单值:', form.getFieldsValue());
+      
       const values = await form.validateFields();
+      console.log('表单验证后的values:', values);
       
       // 将id字段转换为小写
       if (values.id) {
@@ -815,14 +1154,15 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         values.dbType = values.dbType.toLowerCase();
       }
       
-      // 将schema字段中的字段名转换为小写
+      // 将schema字段中的字段名转换为小写，并确保包含nullable字段
       if (values.schema) {
         try {
           const parsedSchema = JSON.parse(values.schema);
           if (parsedSchema.type === 'struct' && parsedSchema.fields) {
             parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
               ...field,
-              name: field.name ? field.name.toLowerCase() : ''
+              name: field.name ? field.name.toLowerCase() : '',
+              nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
             }));
             values.schema = JSON.stringify(parsedSchema);
           }
@@ -831,9 +1171,23 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         }
       }
       
+      // 自动设置hoodie配置中的hoodie.table.name为表ID
+      if (values.hoodieConfig && values.id) {
+        try {
+          const parsedHoodieConfig = JSON.parse(values.hoodieConfig);
+          parsedHoodieConfig['hoodie.table.name'] = values.id.toLowerCase();
+          values.hoodieConfig = JSON.stringify(parsedHoodieConfig);
+          console.log('自动设置hoodie.table.name为:', values.id.toLowerCase());
+        } catch (error) {
+          console.error('设置hoodie.table.name失败:', error);
+        }
+      }
+      
+      console.log('最终提交的values:', values);
       await createTable(values);
     } catch (error) {
       // 表单验证失败
+      console.error('表单验证失败:', error);
     }
   };
 
@@ -851,6 +1205,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         onOk: () => {
           form.resetFields();
           setActiveTab('basic');
+          setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
           setIsPartitioned(true);
           setSchemaEditMode('text');
           setSchemaValue('');
@@ -868,6 +1223,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     } else {
       form.resetFields();
       setActiveTab('basic');
+      setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
       setIsPartitioned(true);
       setSchemaEditMode('text');
       setSchemaValue('');
@@ -930,10 +1286,11 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     try {
       const parsedSchema = JSON.parse(value);
       if (parsedSchema.type === 'struct' && parsedSchema.fields) {
-        // 将字段名转换为小写
+        // 将字段名转换为小写，并确保每个字段都包含nullable字段
         const fieldsWithLowerCase = parsedSchema.fields.map((field: any) => ({
           ...field,
-          name: field.name ? field.name.toLowerCase() : ''
+          name: field.name ? field.name.toLowerCase() : '',
+          nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
         }));
         parsedSchema.fields = fieldsWithLowerCase;
         
@@ -1023,6 +1380,8 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
               onChange={(e) => {
                 const value = e.target.value.toLowerCase(); // 自动转换为小写
                 form.setFieldsValue({ id: value });
+                // 自动更新hoodie.table.name
+                handleTableIdChange(value);
               }}
             />
           </Form.Item>
@@ -1392,9 +1751,15 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         <Button key="cancel" onClick={handleCancel}>
           取消
         </Button>,
-        <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
-          创建
-        </Button>,
+        isAllTabsVisited() ? (
+          <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
+            创建
+          </Button>
+        ) : (
+          <Button key="next" type="primary" onClick={handleNextStep}>
+            下一步 - {getNextTab() ? tabNames[getNextTab() as string] : ''}
+          </Button>
+        ),
       ]}
       width={1200}
       destroyOnClose
@@ -1405,11 +1770,12 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         initialValues={{
           status: TableStatus.OFFLINE,
           isPartitioned: true, // 默认设置为true
+          partitionExpr: "trunc(create_time, 'year')", // 默认使用按年分区
         }}
       >
         <Tabs 
           activeKey={activeTab} 
-          onChange={setActiveTab}
+          onChange={handleTabChange}
           type="card"
           size="large"
         >

@@ -51,6 +51,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('basic'); // 当前活动Tab
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['basic'])); // 已访问的选项卡，默认包含基本信息
   const [isPartitioned, setIsPartitioned] = useState(false);
   const [schemaEditMode, setSchemaEditMode] = useState<'visual' | 'text'>('visual'); // 表结构编辑模式
   const [schemaValue, setSchemaValue] = useState(''); // 表结构值
@@ -64,6 +65,42 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
   const [hoodieConfigValue, setHoodieConfigValue] = useState(''); // Hoodie配置值
   const [hoodieConfigFields, setHoodieConfigFields] = useState<any[]>([]); // 可视化编辑的配置数据
   const [editingHoodieConfigKey, setEditingHoodieConfigKey] = useState<string>(''); // 正在编辑的配置key
+
+  // 所有选项卡的顺序
+  const allTabs = ['basic', 'schema', 'hoodieConfig', 'other'];
+  
+  // 选项卡中文名称映射
+  const tabNames: Record<string, string> = {
+    basic: '基本信息',
+    schema: '表结构',
+    hoodieConfig: 'Hoodie配置',
+    other: '其他信息'
+  };
+
+  // 处理选项卡切换
+  const handleTabChange = (key: string) => {
+    setActiveTab(key);
+    setVisitedTabs(prev => new Set([...prev, key]));
+  };
+
+  // 检查是否所有选项卡都已访问
+  const isAllTabsVisited = () => {
+    return allTabs.every(tab => visitedTabs.has(tab));
+  };
+
+  // 获取下一个选项卡
+  const getNextTab = () => {
+    const currentIndex = allTabs.indexOf(activeTab);
+    return currentIndex < allTabs.length - 1 ? allTabs[currentIndex + 1] : null;
+  };
+
+  // 处理下一步按钮点击
+  const handleNextStep = () => {
+    const nextTab = getNextTab();
+    if (nextTab) {
+      handleTabChange(nextTab);
+    }
+  };
 
   // 分区表达式预设选项
   const partitionOptions = [
@@ -93,7 +130,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
           key: index.toString(),
           name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
           type: field.type,
-          nullable: field.nullable,
+          nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
           comment: field.metadata?.comment || '',
         }));
       }
@@ -122,21 +159,119 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
     }
   };
 
-  // 将字段数据转换为Schema JSON
-  const fieldsToSchema = (fields: any[]) => {
-    const schemaFields = fields.map((field) => ({
-      name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
-      type: field.type,
-      nullable: field.nullable,
-      metadata: {
-        comment: field.comment || '',
-      },
-    }));
-    
-    return JSON.stringify({
+  // 创建复杂类型的辅助函数
+  const createArrayType = (elementType: string, containsNull: boolean = true) => {
+    return {
+      type: 'array',
+      elementType: elementType,
+      containsNull: containsNull,
+    };
+  };
+
+  const createMapType = (keyType: string, valueType: string, valueContainsNull: boolean = true) => {
+    return {
+      type: 'map',
+      keyType: keyType,
+      valueType: valueType,
+      valueContainsNull: valueContainsNull,
+    };
+  };
+
+  const createStructType = (fields: any[]) => {
+    return {
       type: 'struct',
-      fields: schemaFields,
-    }, null, 2);
+      fields: fields,
+    };
+  };
+
+  // 验证和规范化Spark数据类型
+  const normalizeSparkDataType = (dataType: string): string => {
+    // 处理常见的类型别名和格式
+    const typeMap: Record<string, string> = {
+      'int': 'integer',
+      'bigint': 'long',
+      'varchar': 'string',
+      'text': 'string',
+      'datetime': 'timestamp',
+      'bool': 'boolean',
+      'float': 'float',
+      'double': 'double',
+      'decimal': 'decimal',
+      'timestamp_ltz': 'timestamp',
+    };
+
+    // 如果是简单类型映射
+    if (typeMap[dataType.toLowerCase()]) {
+      return typeMap[dataType.toLowerCase()];
+    }
+
+    // 处理decimal类型的格式：decimal(precision,scale)
+    const decimalMatch = dataType.match(/^decimal\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+    if (decimalMatch) {
+      return `decimal(${decimalMatch[1]},${decimalMatch[2]})`;
+    }
+
+    // 处理char和varchar类型
+    const charMatch = dataType.match(/^char\s*\(\s*(\d+)\s*\)$/i);
+    if (charMatch) {
+      return `char(${charMatch[1]})`;
+    }
+
+    const varcharMatch = dataType.match(/^varchar\s*\(\s*(\d+)\s*\)$/i);
+    if (varcharMatch) {
+      return `varchar(${varcharMatch[1]})`;
+    }
+
+    // 其他类型直接返回
+    return dataType;
+  };
+
+  // 将字段数据转换为Schema JSON - 确保与Spark DataType.fromJson兼容
+  const fieldsToSchema = (fields: any[]) => {
+    const sparkSchemaFields = fields.map((field) => {
+      // 处理复杂类型的解析
+      const processFieldType = (fieldType: string): any => {
+        if (typeof fieldType === 'string') {
+          // 检查是否是复杂类型的JSON表示
+          if (fieldType.startsWith('{') && fieldType.endsWith('}')) {
+            try {
+              return JSON.parse(fieldType);
+            } catch (e) {
+              // 如果解析失败，返回原始字符串
+              return normalizeSparkDataType(fieldType);
+            }
+          }
+          // 简单类型进行规范化
+          return normalizeSparkDataType(fieldType);
+        }
+        // 如果已经是对象，直接返回
+        return fieldType;
+      };
+
+      // 按照Spark DataType.parseStructField期望的字段顺序构建
+      // Spark会通过JSortedObject按字母顺序排序，所以最终顺序是：metadata, name, nullable, type
+      const fieldData: any = {
+        metadata: {},
+        name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
+        nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
+        type: processFieldType(field.type),
+      };
+      
+      // 添加comment到metadata中
+      if (field.comment && field.comment.trim() !== '') {
+        fieldData.metadata.comment = field.comment.trim();
+      }
+      
+      return fieldData;
+    });
+    
+    // 生成符合Spark期望格式的schema JSON
+    const schema = {
+      type: 'struct',
+      fields: sparkSchemaFields,
+    };
+    
+    return JSON.stringify(schema, null, 2);
   };
 
   // 将配置数据转换为Hoodie配置JSON
@@ -173,7 +308,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
       key: Date.now().toString(),
       name: '',
       type: 'string',
-      nullable: true,
+      nullable: true, // 新字段默认为可为空
       comment: '',
     };
     const newFields = [...schemaFields, newField];
@@ -591,6 +726,12 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
             console.log('设置主键字段:', primaryKeysStr);
           }
           
+          // 自动设置hoodie.table.name为当前表ID
+          if (record?.id) {
+            parsedConfig['hoodie.table.name'] = record.id.toLowerCase();
+            console.log('自动设置hoodie.table.name:', record.id.toLowerCase());
+          }
+          
           // 更新配置数据
           const updatedData = JSON.stringify(parsedConfig, null, 2);
           
@@ -603,7 +744,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
           setHoodieConfigFields(fields);
           
           console.log('获取默认Hoodie配置成功', updatedData);
-          message.success('获取默认配置成功，已自动设置主键字段');
+          message.success('获取默认配置成功，已自动设置主键字段和表名');
         } catch (error) {
           console.error('解析默认Hoodie配置失败:', error);
           message.error('解析默认Hoodie配置失败');
@@ -663,7 +804,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
     }
   };
 
-  // 处理文本编辑模式下的schema变化
+    // 处理文本编辑模式下的schema变化
   const handleSchemaTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setSchemaValue(value);
@@ -673,11 +814,12 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
     try {
       const parsedSchema = JSON.parse(value);
       if (parsedSchema.type === 'struct' && parsedSchema.fields) {
-        // 将字段名转换为小写
-                 const fieldsWithLowerCase = parsedSchema.fields.map((field: any) => ({
-           ...field,
-           name: field.name ? field.name.toLowerCase() : ''
-         }));
+        // 将字段名转换为小写，并确保每个字段都包含nullable字段
+        const fieldsWithLowerCase = parsedSchema.fields.map((field: any) => ({
+          ...field,
+          name: field.name ? field.name.toLowerCase() : '',
+          nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
+        }));
         parsedSchema.fields = fieldsWithLowerCase;
         
         // 更新schema值
@@ -744,13 +886,17 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
   // 当modal打开时，初始化表单数据
   useEffect(() => {
     if (visible && record) {
+      // 重置已访问的选项卡状态
+      setActiveTab('basic');
+      setVisitedTabs(new Set(['basic']));
+      
       const values = {
         status: record.status,
         dbType: 'mysql', // 默认数据库类型，因为MetaTableDTO中没有此字段
         sourceDb: record.sourceDb,
         sourceTable: record.sourceTable,
         isPartitioned: record.isPartitioned,
-        partitionExpr: record.partitionExpr,
+        partitionExpr: record.partitionExpr || "trunc(create_time, 'year')", // 默认使用按年分区
         tags: record.tags,
         description: record.description,
         schema: record.schema,
@@ -763,7 +909,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
       setSchemaValue(record.schema || '');
       setHoodieConfigValue(record.hoodieConfig || '{}');
       
-      // 解析表结构并将字段名转换为小写
+      // 解析表结构并将字段名转换为小写，确保包含nullable字段
       let schemaToUse = record.schema || '';
       if (schemaToUse) {
         try {
@@ -771,7 +917,8 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
           if (parsedSchema.type === 'struct' && parsedSchema.fields) {
             parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
               ...field,
-              name: field.name ? field.name.toLowerCase() : ''
+              name: field.name ? field.name.toLowerCase() : '',
+              nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
             }));
             schemaToUse = JSON.stringify(parsedSchema);
             setSchemaValue(schemaToUse);
@@ -785,8 +932,21 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
       const fields = parseTableSchema(schemaToUse);
       setSchemaFields(fields);
       
-      // 解析Hoodie配置
-      const hoodieFields = parseHoodieConfig(record.hoodieConfig || '{}');
+      // 解析Hoodie配置，并自动设置hoodie.table.name
+      let hoodieConfigToUse = record.hoodieConfig || '{}';
+      try {
+        const parsedHoodieConfig = JSON.parse(hoodieConfigToUse);
+        // 自动设置hoodie.table.name为表ID
+        parsedHoodieConfig['hoodie.table.name'] = record.id.toLowerCase();
+        hoodieConfigToUse = JSON.stringify(parsedHoodieConfig, null, 2);
+        setHoodieConfigValue(hoodieConfigToUse);
+        form.setFieldsValue({ hoodieConfig: hoodieConfigToUse });
+        console.log('自动设置初始化时的hoodie.table.name为:', record.id.toLowerCase());
+      } catch (error) {
+        console.error('解析并设置hoodie.table.name失败:', error);
+      }
+      
+      const hoodieFields = parseHoodieConfig(hoodieConfigToUse);
       setHoodieConfigFields(hoodieFields);
     }
   }, [visible, record, form]);
@@ -809,19 +969,32 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
         values.dbType = values.dbType.toLowerCase();
       }
       
-      // 将schema字段中的字段名转换为小写
+      // 将schema字段中的字段名转换为小写，并确保包含nullable字段
       if (values.schema) {
         try {
           const parsedSchema = JSON.parse(values.schema);
           if (parsedSchema.type === 'struct' && parsedSchema.fields) {
             parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
               ...field,
-              name: field.name ? field.name.toLowerCase() : ''
+              name: field.name ? field.name.toLowerCase() : '',
+              nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
             }));
             values.schema = JSON.stringify(parsedSchema);
           }
         } catch (error) {
           console.error('转换schema字段名失败:', error);
+        }
+      }
+      
+      // 自动设置hoodie配置中的hoodie.table.name为表ID
+      if (values.hoodieConfig && record.id) {
+        try {
+          const parsedHoodieConfig = JSON.parse(values.hoodieConfig);
+          parsedHoodieConfig['hoodie.table.name'] = record.id.toLowerCase();
+          values.hoodieConfig = JSON.stringify(parsedHoodieConfig);
+          console.log('自动设置hoodie.table.name为:', record.id.toLowerCase());
+        } catch (error) {
+          console.error('设置hoodie.table.name失败:', error);
         }
       }
       
@@ -849,6 +1022,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
         onOk: () => {
           form.resetFields();
           setActiveTab('basic');
+          setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
           setIsPartitioned(false);
           setSchemaEditMode('visual');
           setSchemaValue('');
@@ -866,6 +1040,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
     } else {
       form.resetFields();
       setActiveTab('basic');
+      setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
       setIsPartitioned(false);
       setSchemaEditMode('visual');
       setSchemaValue('');
@@ -1252,9 +1427,15 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
         <Button key="cancel" onClick={handleCancel}>
           取消
         </Button>,
-        <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
-          更新
-        </Button>,
+        isAllTabsVisited() ? (
+          <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
+            更新
+          </Button>
+        ) : (
+          <Button key="next" type="primary" onClick={handleNextStep}>
+            下一步 - {getNextTab() ? tabNames[getNextTab() as string] : ''}
+          </Button>
+        ),
       ]}
       width={1200}
       destroyOnClose
@@ -1265,7 +1446,7 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
       >
         <Tabs 
           activeKey={activeTab} 
-          onChange={setActiveTab}
+          onChange={handleTabChange}
           type="card"
           size="large"
         >

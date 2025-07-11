@@ -423,6 +423,10 @@ const ImportFromBusinessTableModal: React.FC<ImportFromBusinessTableModalProps> 
                 loading={databasesLoading}
                 onChange={handleDatabaseChange}
                 disabled={!selectedServerId || databasesLoading}
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.children?.toString().toLowerCase().includes(input.toLowerCase()) ?? false)
+                }
               >
                 {databases?.map((db: string) => (
                   <Option key={db} value={db}>
@@ -447,9 +451,16 @@ const ImportFromBusinessTableModal: React.FC<ImportFromBusinessTableModalProps> 
                 onChange={handleTableChange}
                 disabled={!selectedDatabase || tablesLoading}
                 showSearch
-                filterOption={(input, option) =>
-                  (option?.children?.toString().toLowerCase().includes(input.toLowerCase()) ?? false)
-                }
+                filterOption={(input, option) => {
+                  const searchValue = input.toLowerCase();
+                  const tableValue = option?.value?.toString().toLowerCase() || '';
+                  // 查找对应的表信息
+                  const tableInfo = businessTables?.find(t => t.tableName === option?.value);
+                  const tableComment = tableInfo?.tableComment?.toLowerCase() || '';
+                  
+                  // 匹配表名或注释
+                  return tableValue.includes(searchValue) || tableComment.includes(searchValue);
+                }}
                 notFoundContent={tablesLoading ? '加载中...' : '暂无数据'}
               >
                 {businessTables?.map((table: BusinessTableInfo) => (
