@@ -35,6 +35,7 @@ export interface MetaTableDTO {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  dbType?: string; // 数据库类型：mysql, oracle, tdsql, buriedpoint等
   hoodieConfig?: string; // Hoodie配置JSON字符串
   createdTime: string;
   updatedTime: string;
@@ -57,6 +58,7 @@ export interface CreateTableRequest {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  dbType?: string; // 数据库类型：mysql, oracle, tdsql, buriedpoint等
   hoodieConfig?: string; // Hoodie配置JSON字符串
 }
 
@@ -74,6 +76,7 @@ export interface UpdateTableRequest {
   sourceTable?: string;
   targetTable?: string;
   targetDb?: string;
+  dbType?: string; // 数据库类型：mysql, oracle, tdsql, buriedpoint等
   hoodieConfig?: string; // Hoodie配置JSON字符串
 }
 

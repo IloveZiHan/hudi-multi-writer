@@ -20,6 +20,8 @@ import {
   Alert,
   Typography,
 } from 'antd';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   PlusOutlined,
   SearchOutlined,
@@ -33,6 +35,8 @@ import {
   RollbackOutlined,
   DatabaseOutlined,
   ImportOutlined,
+  CodeOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useRequest } from 'ahooks';
@@ -78,8 +82,12 @@ const TableManagement: React.FC = () => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const [sparkSqlModalVisible, setSparkSqlModalVisible] = useState(false);
+  const [insertOverwriteModalVisible, setInsertOverwriteModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<MetaTableDTO | null>(null);
   const [importedTableData, setImportedTableData] = useState<ImportTableData | null>(null);
+  const [generatedSparkSql, setGeneratedSparkSql] = useState<string>('');
+  const [generatedInsertOverwriteSql, setGeneratedInsertOverwriteSql] = useState<string>('');
   
   // 操作loading状态
   const [operationLoading, setOperationLoading] = useState<{
@@ -280,7 +288,7 @@ const TableManagement: React.FC = () => {
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: 200,
+      width: 240,
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="查看详情">
@@ -288,6 +296,22 @@ const TableManagement: React.FC = () => {
               type="text"
               icon={<EyeOutlined />}
               onClick={() => handleViewDetail(record)}
+            />
+          </Tooltip>
+          <Tooltip title="生成Spark SQL DDL">
+            <Button
+              type="text"
+              icon={<CodeOutlined />}
+              onClick={() => handleGenerateSparkSQL(record)}
+              loading={operationLoading[`spark_sql_${record.id}`]}
+            />
+          </Tooltip>
+          <Tooltip title="生成INSERT OVERWRITE DML">
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => handleGenerateInsertOverwrite(record)}
+              loading={operationLoading[`insert_overwrite_${record.id}`]}
             />
           </Tooltip>
           <Tooltip title="编辑">
@@ -465,7 +489,7 @@ const TableManagement: React.FC = () => {
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: 200,
+      width: 240,
       render: (_, record) => (
         <Space size="small">
           <Tooltip title="查看详情">
@@ -473,6 +497,24 @@ const TableManagement: React.FC = () => {
               type="text"
               icon={<EyeOutlined />}
               onClick={() => handleViewDetail(record)}
+            />
+          </Tooltip>
+          <Tooltip title="生成Spark SQL DDL">
+            <Button
+              type="text"
+              icon={<CodeOutlined />}
+              onClick={() => handleGenerateSparkSQL(record)}
+              loading={operationLoading[`spark_sql_${record.id}`]}
+              style={{ opacity: 0.7 }}
+            />
+          </Tooltip>
+          <Tooltip title="生成INSERT OVERWRITE DML">
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => handleGenerateInsertOverwrite(record)}
+              loading={operationLoading[`insert_overwrite_${record.id}`]}
+              style={{ opacity: 0.7 }}
             />
           </Tooltip>
           <Tooltip title="恢复">
@@ -575,6 +617,235 @@ const TableManagement: React.FC = () => {
   const handleViewDetail = (record: MetaTableDTO) => {
     setCurrentRecord(record);
     setDetailModalVisible(true);
+  };
+
+  // 处理生成Spark SQL DDL
+  const handleGenerateSparkSQL = async (record: MetaTableDTO) => {
+    const key = `spark_sql_${record.id}`;
+    setOperationLoading(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      // 生成DDL语句
+      const ddlSql = generateSparkSQLDDL(record);
+      setGeneratedSparkSql(ddlSql);
+      setCurrentRecord(record);
+      setSparkSqlModalVisible(true);
+    } catch (error) {
+      message.error(`生成Spark SQL DDL失败: ${error}`);
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // 处理生成INSERT OVERWRITE DML
+  const handleGenerateInsertOverwrite = async (record: MetaTableDTO) => {
+    const key = `insert_overwrite_${record.id}`;
+    setOperationLoading(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      // 生成INSERT OVERWRITE语句
+      const dmlSql = generateInsertOverwriteSQL(record);
+      setGeneratedInsertOverwriteSql(dmlSql);
+      setCurrentRecord(record);
+      setInsertOverwriteModalVisible(true);
+    } catch (error) {
+      message.error(`生成INSERT OVERWRITE语句失败: ${error}`);
+    } finally {
+      setOperationLoading(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // 生成INSERT OVERWRITE语句
+  const generateInsertOverwriteSQL = (record: MetaTableDTO): string => {
+    const { id, schema, dbType, sourceTable, partitionExpr, isPartitioned } = record;
+    
+    // 根据db_type生成库名
+    const getDbName = (dbType?: string): string => {
+      if (!dbType) return 'default';
+      
+      const lowerDbType = dbType.toLowerCase();
+      if (['mysql', 'oracle', 'tdsql'].includes(lowerDbType)) {
+        return 'rtdw';
+      } else if (lowerDbType === 'buriedpoint') {
+        return 'buriedpoint';
+      } else {
+        return 'default';
+      }
+    };
+    
+    // 解析schema JSON
+    let fields: Array<{ name: string; type: string; comment?: string }> = [];
+    try {
+      if (schema) {
+        const schemaData = JSON.parse(schema);
+        if (schemaData.fields) {
+          fields = schemaData.fields.map((field: any) => ({
+            name: field.name,
+            type: field.type,
+            comment: field.comment || '',
+          }));
+        }
+      }
+    } catch (error) {
+      // 如果解析失败，使用默认字段
+      fields = [
+        { name: 'id', type: 'varchar(64)', comment: '物理主键' },
+      ];
+    }
+
+    // 构建SELECT字段列表
+    const selectFields = fields.map(field => {
+      if (field.name === 'cdc_delete_flag') {
+        return `  '0' AS cdc_delete_flag`;
+      } else if (field.name === 'cdc_dt') {
+        const partitionField = partitionExpr || 'cdc_dt';
+        return `  ${partitionField} AS cdc_dt`;
+      } else {
+        // 添加类型转换
+        return `  CAST(${field.name} AS ${field.type}) AS ${field.name}`;
+      }
+    }).join(',\n');
+
+    // 确保包含必要的字段
+    let finalSelectFields = selectFields;
+    const hasDeleteFlag = fields.some(field => field.name === 'cdc_delete_flag');
+    const hasCdcDt = fields.some(field => field.name === 'cdc_dt');
+    
+    if (!hasDeleteFlag) {
+      finalSelectFields += ',\n  \'0\' AS cdc_delete_flag';
+    }
+    if (!hasCdcDt) {
+      const partitionField = partitionExpr || 'cdc_dt';
+      finalSelectFields += `,\n  ${partitionField} AS cdc_dt`;
+    }
+
+    // 生成完整的INSERT OVERWRITE语句
+    const hiveDb = getDbName(dbType);
+    const tableName = id;
+    const sourceTableName = sourceTable || 'source_table';
+
+    return `-- 自动生成的INSERT OVERWRITE语句
+-- 目标表: ${tableName}
+-- 目标库: ${hiveDb}
+-- 源表: ${sourceTableName}
+-- 分区: ${isPartitioned ? '是' : '否'}
+-- 生成时间: ${new Date().toLocaleString()}
+
+INSERT OVERWRITE TABLE ${hiveDb}.${tableName}
+SELECT 
+${finalSelectFields}
+FROM shdata.sh009_${sourceTableName}
+WHERE end_dt = '3000-12-31'
+;`;
+  };
+
+  // 生成Spark SQL DDL语句
+  const generateSparkSQLDDL = (record: MetaTableDTO): string => {
+    const { id, schema, targetDb, dbType, hoodieConfig, isPartitioned, partitionExpr } = record;
+    
+    // 根据db_type生成库名
+    const getDbName = (dbType?: string): string => {
+      if (!dbType) return 'default';
+      
+      const lowerDbType = dbType.toLowerCase();
+      if (['mysql', 'oracle', 'tdsql'].includes(lowerDbType)) {
+        return 'rtdw';
+      } else if (lowerDbType === 'buriedpoint') {
+        return 'buriedpoint';
+      } else {
+        return 'default';
+      }
+    };
+    
+    // 解析schema JSON
+    let fields: Array<{ name: string; type: string; comment?: string }> = [];
+    try {
+      if (schema) {
+        const schemaData = JSON.parse(schema);
+        if (schemaData.fields) {
+          fields = schemaData.fields.map((field: any) => ({
+            name: field.name,
+            type: field.type,
+            comment: field.comment || '',
+          }));
+        }
+      }
+    } catch (error) {
+      // 如果解析失败，使用默认字段
+      fields = [
+        { name: 'id', type: 'varchar(64)', comment: '物理主键' },
+      ];
+    }
+
+    // 添加必须的字段
+    const requiredFields = [
+      { name: 'cdc_delete_flag', type: 'string', comment: 'CDC删除标志' },
+      { name: 'cdc_dt', type: 'string', comment: 'CDC分区日期' },
+    ];
+    
+    // 检查是否已经存在必须字段，如果不存在则添加
+    requiredFields.forEach(requiredField => {
+      const exists = fields.some(field => field.name === requiredField.name);
+      if (!exists) {
+        fields.push(requiredField);
+      }
+    });
+
+    // 解析hoodie配置
+    let tblProperties: Record<string, string> = {};
+    try {
+      if (hoodieConfig) {
+        const config = JSON.parse(hoodieConfig);
+        tblProperties = config;
+      }
+    } catch (error) {
+      // 使用默认配置
+      tblProperties = {
+        'type': 'cow',
+        'hoodie.table.name': id,
+        'hoodie.datasource.write.recordkey.field': 'id',
+        'hoodie.datasource.write.precombine.field': 'updated_time',
+        'hoodie.datasource.write.table.type': 'COPY_ON_WRITE',
+      };
+    }
+
+    // 构建字段定义
+    const fieldDefinitions = fields.map(field => {
+      const comment = field.comment ? ` COMMENT '${field.comment}'` : '';
+      return `    ${field.name} ${field.type}${comment}`;
+    }).join(',\n');
+
+    // 构建分区部分
+    let partitionClause = '';
+    if (isPartitioned) {
+      const partitionField = partitionExpr || 'cdc_dt';
+      partitionClause = `\nPARTITIONED BY (${partitionField})`;
+    }
+
+    // 构建表属性
+    const tblPropertiesStr = Object.entries(tblProperties)
+      .map(([key, value]) => `    '${key}' = '${value}'`)
+      .join(',\n');
+
+    // 生成完整的DDL
+    const hiveDb = getDbName(dbType);
+    const tableName = id;
+
+    return `-- 自动生成的Spark SQL DDL语句
+-- 表名: ${tableName}
+-- 数据库: ${hiveDb}
+-- 数据库类型: ${dbType || 'default'}
+-- 分区: ${isPartitioned ? '是' : '否'}
+-- 生成时间: ${new Date().toLocaleString()}
+
+DROP TABLE IF EXISTS ${hiveDb}.${tableName};
+
+CREATE TABLE IF NOT EXISTS ${hiveDb}.${tableName} (
+${fieldDefinitions}
+) USING HUDI${partitionClause}
+TBLPROPERTIES (
+${tblPropertiesStr}
+);`;
   };
 
   // 处理删除
@@ -1248,6 +1519,158 @@ const TableManagement: React.FC = () => {
           setCurrentRecord(null);
         }}
       />
+
+      {/* Spark SQL DDL模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <CodeOutlined style={{ marginRight: 8 }} />
+            Spark SQL DDL语句
+            {currentRecord && (
+              <span style={{ marginLeft: 8, color: '#666', fontSize: '14px' }}>
+                ({currentRecord.id})
+              </span>
+            )}
+          </div>
+        }
+        visible={sparkSqlModalVisible}
+        onCancel={() => {
+          setSparkSqlModalVisible(false);
+          setCurrentRecord(null);
+          setGeneratedSparkSql('');
+        }}
+        width={800}
+        footer={[
+          <Button key="copy" onClick={() => {
+            navigator.clipboard.writeText(generatedSparkSql);
+            message.success('DDL语句已复制到剪贴板');
+          }}>
+            复制到剪贴板
+          </Button>,
+          <Button key="close" onClick={() => {
+            setSparkSqlModalVisible(false);
+            setCurrentRecord(null);
+            setGeneratedSparkSql('');
+          }}>
+            关闭
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            message="提示"
+            description="以下是根据表的schema和hoodie配置自动生成的Spark SQL DDL语句，请根据实际情况调整。"
+            type="info"
+            showIcon
+          />
+        </div>
+        <div style={{ 
+          borderRadius: 4,
+          border: '1px solid #d9d9d9',
+          maxHeight: '500px',
+          overflow: 'auto',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <SyntaxHighlighter
+            language="sql"
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              padding: 16,
+              fontSize: '13px',
+              lineHeight: '1.5',
+              borderRadius: 4,
+              backgroundColor: '#1e1e1e',
+            }}
+            showLineNumbers={true}
+            wrapLines={true}
+            lineNumberStyle={{
+              minWidth: '3em',
+              paddingRight: '1em',
+              color: '#9CA3AF',
+              fontSize: '12px',
+            }}
+          >
+            {generatedSparkSql}
+          </SyntaxHighlighter>
+        </div>
+      </Modal>
+
+      {/* INSERT OVERWRITE DML模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <CodeOutlined style={{ marginRight: 8 }} />
+            INSERT OVERWRITE DML语句
+            {currentRecord && (
+              <span style={{ marginLeft: 8, color: '#666', fontSize: '14px' }}>
+                ({currentRecord.id})
+              </span>
+            )}
+          </div>
+        }
+        visible={insertOverwriteModalVisible}
+        onCancel={() => {
+          setInsertOverwriteModalVisible(false);
+          setCurrentRecord(null);
+          setGeneratedInsertOverwriteSql('');
+        }}
+        width={800}
+        footer={[
+          <Button key="copy" onClick={() => {
+            navigator.clipboard.writeText(generatedInsertOverwriteSql);
+            message.success('DML语句已复制到剪贴板');
+          }}>
+            复制到剪贴板
+          </Button>,
+          <Button key="close" onClick={() => {
+            setInsertOverwriteModalVisible(false);
+            setCurrentRecord(null);
+            setGeneratedInsertOverwriteSql('');
+          }}>
+            关闭
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            message="提示"
+            description="以下是根据表的schema和hoodie配置自动生成的INSERT OVERWRITE DML语句，请根据实际情况调整。"
+            type="info"
+            showIcon
+          />
+        </div>
+        <div style={{ 
+          borderRadius: 4,
+          border: '1px solid #d9d9d9',
+          maxHeight: '500px',
+          overflow: 'auto',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+        }}>
+          <SyntaxHighlighter
+            language="sql"
+            style={vscDarkPlus}
+            customStyle={{
+              margin: 0,
+              padding: 16,
+              fontSize: '13px',
+              lineHeight: '1.5',
+              borderRadius: 4,
+              backgroundColor: '#1e1e1e',
+            }}
+            showLineNumbers={true}
+            wrapLines={true}
+            lineNumberStyle={{
+              minWidth: '3em',
+              paddingRight: '1em',
+              color: '#9CA3AF',
+              fontSize: '12px',
+            }}
+          >
+            {generatedInsertOverwriteSql}
+          </SyntaxHighlighter>
+        </div>
+      </Modal>
     </div>
   );
 };
