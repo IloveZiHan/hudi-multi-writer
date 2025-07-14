@@ -20,8 +20,9 @@ import {
   Typography,
   Popconfirm,
   AutoComplete,
+  Alert,
 } from 'antd';
-import { PlusOutlined, DatabaseOutlined, EditOutlined, DeleteOutlined, SettingOutlined, InfoCircleOutlined, TableOutlined, FileTextOutlined, EditFilled } from '@ant-design/icons';
+import { PlusOutlined, DatabaseOutlined, EditOutlined, DeleteOutlined, SettingOutlined, InfoCircleOutlined, TableOutlined, FileTextOutlined, EditFilled, CheckCircleOutlined } from '@ant-design/icons';
 import { useRequest } from 'ahooks';
 import tableApiService from '@services/tableApi';
 import hoodieConfigApiService from '@services/hoodieConfigApi';
@@ -52,7 +53,6 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('basic'); // 当前活动Tab
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['basic'])); // 已访问的选项卡，默认包含基本信息
   const [isPartitioned, setIsPartitioned] = useState(true); // 默认设置为true
   const [schemaEditMode, setSchemaEditMode] = useState<'visual' | 'text'>('text'); // 表结构编辑模式
   const [schemaValue, setSchemaValue] = useState(''); // 表结构值
@@ -60,7 +60,9 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const [editingKey, setEditingKey] = useState<string>(''); // 正在编辑的字段key
   const [batchInputVisible, setBatchInputVisible] = useState(false); // 批量录入Modal是否可见
   const [batchInputValue, setBatchInputValue] = useState(''); // 批量录入的值
-
+  
+  // 选项卡访问状态
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['basic'])); // 记录用户访问过的选项卡，默认包含basic
   
   // Hoodie Config 相关状态
   const [hoodieConfigEditMode, setHoodieConfigEditMode] = useState<'visual' | 'text'>('visual'); // Hoodie配置编辑模式
@@ -68,40 +70,32 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   const [hoodieConfigFields, setHoodieConfigFields] = useState<any[]>([]); // 可视化编辑的配置数据
   const [editingHoodieConfigKey, setEditingHoodieConfigKey] = useState<string>(''); // 正在编辑的配置key
 
-  // 所有选项卡的顺序
-  const allTabs = ['basic', 'schema', 'hoodieConfig', 'other'];
-  
-  // 选项卡中文名称映射
-  const tabNames: Record<string, string> = {
-    basic: '基本信息',
-    schema: '表结构',
-    hoodieConfig: 'Hoodie配置',
-    other: '其他信息'
-  };
-
   // 处理选项卡切换
   const handleTabChange = (key: string) => {
     setActiveTab(key);
-    setVisitedTabs(prev => new Set([...prev, key]));
+    // 记录用户访问过的选项卡
+    setVisitedTabs(prev => new Set(prev).add(key));
   };
 
-  // 检查是否所有选项卡都已访问
-  const isAllTabsVisited = () => {
-    return allTabs.every(tab => visitedTabs.has(tab));
+  // 检查是否访问过必要的选项卡
+  const checkTabsVisited = () => {
+    const requiredTabs = ['schema', 'hoodieConfig', 'other'];
+    const unvisitedTabs = requiredTabs.filter(tab => !visitedTabs.has(tab));
+    return unvisitedTabs;
   };
 
-  // 获取下一个选项卡
-  const getNextTab = () => {
-    const currentIndex = allTabs.indexOf(activeTab);
-    return currentIndex < allTabs.length - 1 ? allTabs[currentIndex + 1] : null;
-  };
-
-  // 处理下一步按钮点击
-  const handleNextStep = () => {
-    const nextTab = getNextTab();
-    if (nextTab) {
-      handleTabChange(nextTab);
-    }
+  // 渲染选项卡标题（带确认状态）
+  const renderTabTitle = (icon: React.ReactNode, title: string, tabKey: string) => {
+    const isVisited = visitedTabs.has(tabKey);
+    return (
+      <Space>
+        {icon}
+        {title}
+        {isVisited && tabKey !== 'basic' && (
+          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+        )}
+      </Space>
+    );
   };
 
   // 分区表达式预设选项
@@ -131,7 +125,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
       
       // 设置页签状态，确保显示基本信息页签
       setActiveTab('basic');
-      setVisitedTabs(new Set(['basic']));
+      setVisitedTabs(new Set(['basic'])); // 重置访问状态
       
       // 设置schema相关状态，并将字段名转换为小写，确保包含nullable字段
       let schemaToUse = importData.schema;
@@ -234,13 +228,18 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     if (visible && !importData) {
       form.resetFields();
       setActiveTab('basic');
-      setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
+      setIsPartitioned(true);
+      setSchemaEditMode('text');
       setSchemaValue('');
       setSchemaFields([]);
-      setSchemaEditMode('text');
+      setEditingKey('');
+      setBatchInputVisible(false);
+      setBatchInputValue('');
+      setHoodieConfigEditMode('visual');
       setHoodieConfigValue('');
       setHoodieConfigFields([]);
-      setHoodieConfigEditMode('visual');
+      setEditingHoodieConfigKey('');
+      setVisitedTabs(new Set(['basic'])); // 重置访问状态
       
       // 获取默认Hoodie配置
       getDefaultConfig();
@@ -1048,6 +1047,22 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   // 处理表单提交
   const handleSubmit = async () => {
     try {
+      // 检查用户是否访问过必要的选项卡
+      const unvisitedTabs = checkTabsVisited();
+      if (unvisitedTabs.length > 0) {
+        const tabNames = {
+          schema: '表结构',
+          hoodieConfig: 'Hoodie配置',
+          other: '其他信息'
+        };
+        const unvisitedTabNames = unvisitedTabs.map(tab => tabNames[tab as keyof typeof tabNames]).join('、');
+        message.warning(`请先查看并确认以下选项卡的内容：${unvisitedTabNames}`);
+        
+        // 自动切换到第一个未访问的选项卡
+        setActiveTab(unvisitedTabs[0]);
+        return;
+      }
+      
       console.log('开始处理表单提交');
       console.log('当前schemaEditMode:', schemaEditMode);
       console.log('当前schemaFields:', schemaFields);
@@ -1205,7 +1220,6 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         onOk: () => {
           form.resetFields();
           setActiveTab('basic');
-          setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
           setIsPartitioned(true);
           setSchemaEditMode('text');
           setSchemaValue('');
@@ -1217,13 +1231,13 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           setHoodieConfigValue('');
           setHoodieConfigFields([]);
           setEditingHoodieConfigKey('');
+          setVisitedTabs(new Set(['basic'])); // 重置访问状态
           onCancel();
         },
       });
     } else {
       form.resetFields();
       setActiveTab('basic');
-      setVisitedTabs(new Set(['basic'])); // 重置已访问的选项卡
       setIsPartitioned(true);
       setSchemaEditMode('text');
       setSchemaValue('');
@@ -1235,6 +1249,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
       setHoodieConfigValue('');
       setHoodieConfigFields([]);
       setEditingHoodieConfigKey('');
+      setVisitedTabs(new Set(['basic'])); // 重置访问状态
       onCancel();
     }
   };
@@ -1751,15 +1766,9 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         <Button key="cancel" onClick={handleCancel}>
           取消
         </Button>,
-        isAllTabsVisited() ? (
-          <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
-            创建
-          </Button>
-        ) : (
-          <Button key="next" type="primary" onClick={handleNextStep}>
-            下一步 - {getNextTab() ? tabNames[getNextTab() as string] : ''}
-          </Button>
-        ),
+        <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
+          创建
+        </Button>,
       ]}
       width={1200}
       destroyOnClose
@@ -1773,6 +1782,13 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           partitionExpr: "trunc(create_time, 'year')", // 默认使用按年分区
         }}
       >
+        <Alert
+          message="创建表前必须查看所有选项卡"
+          description="请依次查看和确认「表结构」、「Hoodie配置」、「其他信息」等选项卡的内容，确保配置正确后再创建表。"
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
         <Tabs 
           activeKey={activeTab} 
           onChange={handleTabChange}
@@ -1780,48 +1796,28 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           size="large"
         >
           <TabPane 
-            tab={
-              <Space>
-                <InfoCircleOutlined />
-                基本信息
-              </Space>
-            } 
+            tab={renderTabTitle(<InfoCircleOutlined />, '基本信息', 'basic')}
             key="basic"
           >
             {renderBasicInfoTab()}
           </TabPane>
           
           <TabPane 
-            tab={
-              <Space>
-                <TableOutlined />
-                表结构
-              </Space>
-            } 
+            tab={renderTabTitle(<TableOutlined />, '表结构', 'schema')}
             key="schema"
           >
             {renderSchemaTab()}
           </TabPane>
           
           <TabPane 
-            tab={
-              <Space>
-                <SettingOutlined />
-                Hoodie配置
-              </Space>
-            } 
+            tab={renderTabTitle(<SettingOutlined />, 'Hoodie配置', 'hoodieConfig')}
             key="hoodieConfig"
           >
             {renderHoodieConfigTab()}
           </TabPane>
           
           <TabPane 
-            tab={
-              <Space>
-                <FileTextOutlined />
-                其他信息
-              </Space>
-            } 
+            tab={renderTabTitle(<FileTextOutlined />, '其他信息', 'other')}
             key="other"
           >
             {renderOtherInfoTab()}
