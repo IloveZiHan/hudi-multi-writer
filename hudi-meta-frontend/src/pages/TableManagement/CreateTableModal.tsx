@@ -992,6 +992,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
           if (primaryKeyFields.length > 0) {
             const primaryKeysStr = primaryKeyFields.join(',');
             parsedConfig['hoodie.table.recordkey.fields'] = primaryKeysStr;
+            parsedConfig['hoodie.datasource.write.recordkey.field'] = primaryKeysStr;
             parsedConfig['hoodie.bucket.index.hash.field'] = primaryKeysStr;
             console.log('设置主键字段:', primaryKeysStr);
           }

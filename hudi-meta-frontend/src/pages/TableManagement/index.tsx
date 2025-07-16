@@ -818,7 +818,7 @@ WHERE end_dt = '3000-12-31'
     // 构建分区部分
     let partitionClause = '';
     if (isPartitioned) {
-      const partitionField = partitionExpr || 'cdc_dt';
+      const partitionField = 'cdc_dt';
       partitionClause = `\nPARTITIONED BY (${partitionField})`;
     }
 
