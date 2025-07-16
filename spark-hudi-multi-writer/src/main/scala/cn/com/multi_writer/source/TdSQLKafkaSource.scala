@@ -1,6 +1,6 @@
 package cn.com.multi_writer.source
 
-import cn.com.multi_writer.schema.KafkaSchema
+import cn.com.multi_writer.schema.TdSQLKafkaSchema
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.streaming.DataStreamReader
@@ -9,7 +9,7 @@ import org.apache.spark.sql.streaming.DataStreamReader
  * Kafka数据源封装类
  * 负责消费Kafka数据并解析JSON格式的binlog消息
  */
-class KafkaSource(spark: SparkSession) {
+class TdSQLKafkaSource(spark: SparkSession) {
 
     // 导入隐式转换
 
@@ -57,7 +57,7 @@ class KafkaSource(spark: SparkSession) {
                 col("offset").as("kafka_offset"),
                 col("timestamp").as("kafka_timestamp")
             )
-            .withColumn("parsed_data", from_json(col("kafka_value"), KafkaSchema.tdSQLBinlogSchema))
+            .withColumn("parsed_data", from_json(col("kafka_value"), TdSQLKafkaSchema.tdSQLBinlogSchema))
             .select(
                 col("kafka_key"),
                 col("kafka_value"),

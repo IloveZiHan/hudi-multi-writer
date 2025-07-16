@@ -53,36 +53,10 @@ case class TableConfig(id: String, fieldMapping: Seq[(String, DataType)], status
      * @return Map[String, String] 包含基础配置和自定义配置的映射
      */
     def getHudiOptions(): Map[String, String] = {
-        // 基础Hudi配置
-        val baseOptions = Map(
-            "hoodie.datasource.write.table.name" -> id,
-            "hoodie.datasource.write.operation" -> "upsert",
-            "hoodie.datasource.write.table.type" -> "COPY_ON_WRITE"
-        )
-        
-        // 如果hoodieConfig存在，解析JSON并添加自定义配置
-        val customOptions = hoodieConfig.filter(_.trim.nonEmpty).map { configStr =>
-            try {
-                // 使用FastJSON解析JSON字符串为Map结构
-                val hoodieConfigMap = JSON.parseObject(configStr).asScala.toMap.map {
-                    case (k, v) => k -> v.toString
-                }
-                
-                logger.info(s"成功解析表 $id 的Hudi配置JSON: ${hoodieConfigMap.size} 项配置")
-                hoodieConfigMap
-            } catch {
-                case e: Exception =>
-                    logger.error(s"解析表 $id 的Hudi配置JSON失败: ${e.getMessage}", e)
-                    logger.info(s"配置内容: ${configStr.take(200)}...")
-                    Map.empty[String, String]
-            }
-        }.getOrElse(Map.empty)
-        
-        // 合并基础配置和自定义配置
-        val allOptions = baseOptions ++ customOptions
-        
-        logger.info(s"表 $id 的Hudi配置: ${allOptions.mkString(", ")}")
-        allOptions
+        // json解析hoodieConfig
+        val hoodieConfigMap = JSON.parseObject(hoodieConfig.getOrElse("{}"))
+        // 将hoodieConfigMap转换为Map[String, String]
+        hoodieConfigMap.asScala.toMap.mapValues(_.toString)
     }
 
     /**

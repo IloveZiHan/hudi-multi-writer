@@ -53,6 +53,8 @@ class MetaMySQLTableManager(val spark: SparkSession,
                   AND hmt.cdc_delete_flag = 0
                   AND hmta.table_type = 'hudi'
             """
+
+            logger.info(s"查询表元数据SQL: $sql")
             
             spark.read
                 .format("jdbc")

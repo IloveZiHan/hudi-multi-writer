@@ -13,11 +13,79 @@ object SparkSessionManager {
   // 创建logger实例
   private val logger: Logger = LoggerFactory.getLogger(SparkSessionManager.getClass)
 
+  /**
+   * 根据当前执行的主类名称获取对应的Kafka topic
+   * @return 对应的Kafka topic名称
+   */
+  private def getKafkaTopicByMainClass(): String = {
+    try {
+      // 获取当前线程的堆栈信息
+      val stackTrace = Thread.currentThread().getStackTrace()
+      
+      // 查找main方法所在的类
+      val mainClassOption = stackTrace.find(_.getMethodName == "main")
+        .map(_.getClassName)
+      
+      mainClassOption match {
+        case Some(className) if className.contains("OggCdcStreamJob") =>
+          logger.info(s"检测到主类: $className，设置Kafka topic为: realtime_dataware")
+          "realtime_dataware"
+        case Some(className) if className.contains("TdsqlCdcStreamJob") =>
+          logger.info(s"检测到主类: $className，设置Kafka topic为: rtdw_tdsql_alc")
+          "rtdw_tdsql_alc"
+        case Some(className) =>
+          logger.warn(s"未识别的主类: $className，使用默认Kafka topic: rtdw_tdsql_alc")
+          "rtdw_tdsql_alc"
+        case None =>
+          logger.warn("无法检测到主类，使用默认Kafka topic: rtdw_tdsql_alc")
+          "rtdw_tdsql_alc"
+      }
+    } catch {
+      case e: Exception =>
+        logger.error(s"检测主类时发生异常: ${e.getMessage}, 使用默认Kafka topic: rtdw_tdsql_alc")
+        "rtdw_tdsql_alc"
+    }
+  }
+
+  /**
+   * 根据当前执行的主类名称获取对应的应用程序名称
+   * @return 对应的应用程序名称
+   */
+  private def getApplicationNameByMainClass(): String = {
+    try {
+      // 获取当前线程的堆栈信息
+      val stackTrace = Thread.currentThread().getStackTrace()
+      
+      // 查找main方法所在的类
+      val mainClassOption = stackTrace.find(_.getMethodName == "main")
+        .map(_.getClassName)
+      
+      mainClassOption match {
+        case Some(className) if className.contains("OggCdcStreamJob") =>
+          logger.info(s"检测到主类: $className，设置应用程序名称为: spark-hudi-cdc-oracle-stream-job")
+          "spark-hudi-cdc-oracle-stream-job"
+        case Some(className) if className.contains("TdsqlCdcStreamJob") =>
+          logger.info(s"检测到主类: $className，设置应用程序名称为: spark-hudi-tdsql-stream-job")
+          "spark-hudi-tdsql-stream-job"
+        case Some(className) =>
+          logger.warn(s"未识别的主类: $className，使用默认应用程序名称: spark-hudi-cdc-stream-job")
+          "spark-hudi-cdc-stream-job"
+        case None =>
+          logger.warn("无法检测到主类，使用默认应用程序名称: spark-hudi-cdc-stream-job")
+          "spark-hudi-cdc-stream-job"
+      }
+    } catch {
+      case e: Exception =>
+        logger.error(s"检测主类时发生异常: ${e.getMessage}, 使用默认应用程序名称: spark-hudi-cdc-stream-job")
+        "spark-hudi-cdc-stream-job"
+    }
+  }
+
   // 定义系统默认配置值，用于判断用户是否修改了配置
   private val DEFAULT_CONFIGS = Map(
-    "spark.application.name" -> "hudi-cdc-stream-job",
+    "spark.application.name" -> getApplicationNameByMainClass(), // 根据主类动态设置应用程序名称
     "spark.kafka.bootstrap.servers" -> "10.94.162.31:9092",
-    "spark.kafka.topic" -> "rtdw_tdsql_alc", 
+    "spark.kafka.topic" -> getKafkaTopicByMainClass(), // 根据主类动态设置topic
     "spark.shuffle_partition.records" -> "100000",
     "spark.kafka.consumer.group.id" -> "hudi-cdc-consumer-group",
     "spark.kafka.auto.offset.reset" -> "earliest",

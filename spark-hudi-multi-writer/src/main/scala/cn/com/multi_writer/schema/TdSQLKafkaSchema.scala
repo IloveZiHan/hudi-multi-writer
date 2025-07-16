@@ -6,7 +6,7 @@ import org.apache.spark.sql.types._
  * Kafka消息Schema定义
  * 包含TdSQL Binlog JSON数据的结构定义
  */
-object KafkaSchema {
+object TdSQLKafkaSchema {
   
   /**
    * TdSQL Binlog JSON数据的Schema定义
