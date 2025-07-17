@@ -113,6 +113,7 @@ class TdsqlBatchProcessor(spark: SparkSession) {
         // 构建CDC字段表达式
         val cdcFieldExpressions = buildCdcFields(partitionExpr)
 
+
         // 添加CDC字段
         val allExpressions = fieldExpressions ++ cdcFieldExpressions
 
