@@ -1,4 +1,5 @@
 {
+  "hoodie.table.name":"${table_name}",
   "hoodie.table.recordkey.fields": "id",
   "hoodie.bucket.index.hash.field": "id",
   "hoodie.insert.shuffle.parallelism": "10",
@@ -8,6 +9,7 @@
   "hoodie.index.bucket.engine": "SIMPLE",
   "hoodie.datasource.write.table.type": "COPY_ON_WRITE",
   "hoodie.table.keygenerator.class": "org.apache.hudi.keygen.SimpleKeyGenerator",
+  "hoodie.datasource.write.recordkey.field": "id",
   "hoodie.datasource.write.operation": "upsert",
   "hoodie.datasource.insert.dup.policy": "insert",
   "hoodie.datasource.meta.sync.enable": "false",

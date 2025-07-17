@@ -76,4 +76,15 @@ CREATE TABLE IF NOT EXISTS `hoodie_meta_db_server` (
   `update_user` varchar(100) DEFAULT NULL COMMENT '更新人',
   `update_time` timestamp NULL DEFAULT NULL COMMENT '更新时间',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COMMENT='数据库服务器表'
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT='数据库服务器表';
+
+-- 创建Hudi表、应用关联表
+CREATE TABLE IF NOT EXISTS `hoodie_meta_table_application` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '代理主键',
+  `table_id` varchar(100) NOT NULL COMMENT '表ID',
+  `application_name` varchar(100) NOT NULL COMMENT '应用名称',
+  `table_type` varchar(100) NOT NULL COMMENT '表类型:hudi,kafka,es,jdbc...',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT='Hudi表、应用关联表';
