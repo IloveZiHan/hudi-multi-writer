@@ -34,8 +34,11 @@ object SparkSessionManager {
           logger.info(s"检测到主类: $className，设置Kafka topic为: rtdw_tdsql_alc")
           "rtdw_tdsql_alc"
         case Some(className) if className.contains("CanalCdcStreamJob") =>
-          logger.warn(s"未识别的主类: $className，使用默认Kafka topic: rtdw_mysql_sms")
+          logger.warn(s"未识别的主类: $className，设置Kafka topic为: rtdw_mysql_sms")
           "rtdw_mysql_sms"
+        case Some(className) if className.contains("BuriedpointCdcStreamJob") =>
+          logger.warn(s"未识别的主类: $className，设置Kafka topic为: tracker_marketing")
+          "tracker_marketing"
         case None =>
           logger.warn("无法检测到主类，使用默认Kafka topic: rtdw_tdsql_alc")
           "rtdw_tdsql_alc"
@@ -70,6 +73,9 @@ object SparkSessionManager {
         case Some(className) if className.contains("CanalCdcStreamJob$") =>
           logger.warn(s"未识别的主类: $className，使用默认应用程序名称: spark-hudi-cdc-canal-stream-job")
           "spark-hudi-cdc-canal-stream-job"
+        case Some(className) if className.contains("BuriedpointCdcStreamJob") =>
+          logger.warn(s"未识别的主类: $className，使用默认应用程序名称: spark-hudi-cdc-bp-stream-job")
+          "spark-hudi-cdc-bp-stream-job"
         case None =>
           logger.warn("无法检测到主类，使用默认应用程序名称: spark-hudi-cdc-stream-job")
           "spark-hudi-cdc-stream-job"
