@@ -136,14 +136,17 @@ spring:
     activate:
       on-profile: dev
   
-  # 开发环境数据源配置
+  # 开发环境数据源配置 - 修改为本地数据库或可访问的数据库
   datasource:
-    jdbc-url: jdbc:mysql://10.94.158.109:33061/rtdw_meta?useSSL=false&serverTimezone=GMT%2B8&characterEncoding=utf8
+    jdbc-url: jdbc:mysql://localhost:3306/rtdw_meta?useSSL=false&serverTimezone=GMT%2B8&characterEncoding=utf8&createDatabaseIfNotExist=true
     username: root
-    password: H5*ajAXVhT
+    password: your_local_password
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
+      # 添加连接测试配置
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
 
 # 开发环境Spark配置
 spark:

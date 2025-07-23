@@ -88,3 +88,15 @@ CREATE TABLE IF NOT EXISTS `hoodie_meta_table_application` (
   `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT='Hudi表、应用关联表';
+
+
+-- 创建应用程序表
+CREATE TABLE IF NOT EXISTS `hoodie_meta_application` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '代理主键',
+  `name` varchar(100) NOT NULL COMMENT '应用名称',
+  `description` text COMMENT '描述信息',
+  `conf` text COMMENT '配置信息',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` timestamp NULL DEFAULT NULL COMMENT '更新时间',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT='应用程序表';

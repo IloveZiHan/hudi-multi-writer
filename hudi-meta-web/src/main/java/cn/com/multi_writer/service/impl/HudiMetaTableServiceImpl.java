@@ -627,4 +627,9 @@ public class HudiMetaTableServiceImpl implements MetaTableService {
     public boolean restoreTable(String id) {
         return false;
     }
+
+    @Override
+    public boolean permanentDelete(String id) {
+        return false;
+    }
 } 
