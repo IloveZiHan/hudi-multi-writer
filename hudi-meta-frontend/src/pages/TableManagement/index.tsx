@@ -34,9 +34,9 @@ import {
   CloudDownloadOutlined,
   RollbackOutlined,
   DatabaseOutlined,
-  ImportOutlined,
   CodeOutlined,
   FileTextOutlined,
+  ImportOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useRequest } from 'ahooks';
@@ -52,7 +52,7 @@ import {
 import CreateTableModal from './CreateTableModal';
 import EditTableModal from './EditTableModal';
 import TableDetailModal from './TableDetailModal';
-import ImportFromBusinessTableModal, { ImportTableData } from '../MetadataManagement/ImportFromBusinessTableModal';
+import ImportBusinessTableModal from './ImportBusinessTableModal';
 import './index.less';
 
 const { Option } = Select;
@@ -81,11 +81,10 @@ const TableManagement: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [importModalVisible, setImportModalVisible] = useState(false);
+  const [importBusinessTableModalVisible, setImportBusinessTableModalVisible] = useState(false);
   const [sparkSqlModalVisible, setSparkSqlModalVisible] = useState(false);
   const [insertOverwriteModalVisible, setInsertOverwriteModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<MetaTableDTO | null>(null);
-  const [importedTableData, setImportedTableData] = useState<ImportTableData | null>(null);
   const [generatedSparkSql, setGeneratedSparkSql] = useState<string>('');
   const [generatedInsertOverwriteSql, setGeneratedInsertOverwriteSql] = useState<string>('');
   
@@ -595,16 +594,9 @@ const TableManagement: React.FC = () => {
     setCreateModalVisible(true);
   };
 
-  // 处理从业务表导入
-  const handleImportFromBusinessTable = () => {
-    setImportModalVisible(true);
-  };
-
-  // 处理导入完成
-  const handleImportComplete = (importData: ImportTableData) => {
-    setImportedTableData(importData);
-    setImportModalVisible(false);
-    setCreateModalVisible(true);
+  // 处理从业务系统导入
+  const handleImportBusinessTable = () => {
+    setImportBusinessTableModalVisible(true);
   };
 
   // 处理编辑
@@ -1029,7 +1021,14 @@ ${tblPropertiesStr}
   // 处理创建成功
   const handleCreateSuccess = () => {
     setCreateModalVisible(false);
-    setImportedTableData(null); // 清理导入数据
+    message.success('表创建成功！');
+    fetchTables();
+    fetchStats();
+  };
+
+  // 处理导入成功
+  const handleImportSuccess = () => {
+    setImportBusinessTableModalVisible(false);
     fetchTables();
     fetchStats();
   };
@@ -1264,9 +1263,9 @@ ${tblPropertiesStr}
             </Button>
             <Button
               icon={<ImportOutlined />}
-              onClick={handleImportFromBusinessTable}
+              onClick={handleImportBusinessTable}
             >
-              从业务表导入
+              从业务系统导入
             </Button>
             <Button
               icon={<DeleteOutlined />}
@@ -1484,19 +1483,15 @@ ${tblPropertiesStr}
       {/* 创建表模态框 */}
       <CreateTableModal
         visible={createModalVisible}
-        onCancel={() => {
-          setCreateModalVisible(false);
-          setImportedTableData(null); // 取消时也清理导入数据
-        }}
+        onCancel={() => setCreateModalVisible(false)}
         onSuccess={handleCreateSuccess}
-        importData={importedTableData} // 传递导入数据
       />
 
-      {/* 从业务表导入对话框 */}
-      <ImportFromBusinessTableModal
-        visible={importModalVisible}
-        onCancel={() => setImportModalVisible(false)}
-        onImport={handleImportComplete}
+      {/* 从业务系统导入表模态框 */}
+      <ImportBusinessTableModal
+        visible={importBusinessTableModalVisible}
+        onCancel={() => setImportBusinessTableModalVisible(false)}
+        onSuccess={handleImportSuccess}
       />
 
       {/* 编辑表模态框 */}

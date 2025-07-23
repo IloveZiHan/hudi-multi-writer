@@ -27,7 +27,6 @@ import { useRequest } from 'ahooks';
 import tableApiService from '@services/tableApi';
 import hoodieConfigApiService from '@services/hoodieConfigApi';
 import { CreateTableRequest, TableStatus, SupportedDbTypes } from '../../types/api';
-import { ImportTableData } from '../MetadataManagement/ImportFromBusinessTableModal';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -39,7 +38,19 @@ interface CreateTableModalProps {
   visible: boolean;
   onCancel: () => void;
   onSuccess: () => void;
-  importData?: ImportTableData; // 从业务表导入的数据
+  initialData?: {
+    id?: string;
+    sourceDb?: string;
+    sourceTable?: string;
+    dbType?: string;
+    schema?: string;
+    description?: string;
+    tags?: string;
+    status?: TableStatus;
+    partitionExpr?: string;
+    isPartitioned?: boolean;
+    hoodieConfig?: string;
+  };
 }
 
 /**
@@ -49,11 +60,11 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
   visible,
   onCancel,
   onSuccess,
-  importData,
+  initialData,
 }) => {
   const [form] = Form.useForm();
   const [activeTab, setActiveTab] = useState('basic'); // 当前活动Tab
-  const [isPartitioned, setIsPartitioned] = useState(true); // 默认设置为true
+  // 分区表固定为true，不允许用户更改
   const [schemaEditMode, setSchemaEditMode] = useState<'visual' | 'text'>('text'); // 表结构编辑模式
   const [schemaValue, setSchemaValue] = useState(''); // 表结构值
   const [schemaFields, setSchemaFields] = useState<any[]>([]); // 可视化编辑的字段数据
@@ -117,118 +128,11 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     }
   ];
 
-  // 当有导入数据时，初始化表单
+  // 当modal可见时，重置表单并获取默认配置
   useEffect(() => {
-    if (visible && importData) {
-      console.log('CreateTableModal 接收到的导入数据:', importData);
-      console.log('导入的 hoodieConfig:', importData.hoodieConfig);
-      
-      // 设置页签状态，确保显示基本信息页签
-      setActiveTab('basic');
-      setVisitedTabs(new Set(['basic'])); // 重置访问状态
-      
-      // 设置schema相关状态，并将字段名转换为小写，确保包含nullable字段
-      let schemaToUse = importData.schema;
-      try {
-        const parsedSchema = JSON.parse(importData.schema);
-        if (parsedSchema.type === 'struct' && parsedSchema.fields) {
-          parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
-            ...field,
-            name: field.name.toLowerCase(),
-            nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
-          }));
-          schemaToUse = JSON.stringify(parsedSchema, null, 2);
-        }
-      } catch (error) {
-        console.error('转换导入schema字段名失败:', error);
-      }
-      
-      // 解析导入的字段到可视化编辑器
-      const visualFields = importData.fields.map((field, index) => ({
-        key: index.toString(),
-        name: field.name ? field.name.toLowerCase() : '', // 转换为小写，处理空值
-        type: field.type,
-        nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
-        comment: field.comment,
-      }));
-      
-      // 使用导入数据中的hoodie配置
-      let hoodieConfigToUse = importData.hoodieConfig;
-      if (!hoodieConfigToUse) {
-        console.log('没有导入的 hoodieConfig，使用默认配置');
-        // 如果没有hoodie配置，使用默认配置
-        const defaultHoodieConfig = {
-          'hoodie.table.type': 'COPY_ON_WRITE',
-          'hoodie.database.name': importData.sourceDb.toLowerCase(),
-          'hoodie.table.name': importData.tableId.toLowerCase(), // 使用表ID作为表名
-        };
-        hoodieConfigToUse = JSON.stringify(defaultHoodieConfig, null, 2);
-      } else {
-        // 如果有hoodie配置，确保hoodie.table.name被设置为表ID
-        try {
-          const parsedHoodieConfig = JSON.parse(hoodieConfigToUse);
-          parsedHoodieConfig['hoodie.table.name'] = importData.tableId.toLowerCase();
-          hoodieConfigToUse = JSON.stringify(parsedHoodieConfig, null, 2);
-          console.log('自动设置导入配置中的hoodie.table.name为:', importData.tableId.toLowerCase());
-        } catch (error) {
-          console.error('解析并设置hoodie.table.name失败:', error);
-        }
-      }
-      
-      console.log('最终使用的 hoodieConfig:', hoodieConfigToUse);
-      
-      // 解析hoodie配置到可视化编辑器
-      const hoodieFields = parseHoodieConfig(hoodieConfigToUse);
-      console.log('解析后的 hoodieFields:', hoodieFields);
-      
-      // 立即设置所有状态
-      setSchemaValue(schemaToUse);
-      setSchemaFields(visualFields);
-      setHoodieConfigValue(hoodieConfigToUse);
-      setHoodieConfigFields(hoodieFields);
-      setSchemaEditMode('visual');
-      setHoodieConfigEditMode('visual');
-      
-      // 立即设置表单字段值，确保隐藏字段有正确的值
-      const formValues = {
-        id: importData.tableId.toLowerCase(), // 转换为小写
-        schema: schemaToUse, // 使用转换后的schema
-        dbType: importData.dbType.toLowerCase(), // 转换为小写
-        sourceDb: importData.sourceDb.toLowerCase(), // 转换为小写
-        sourceTable: importData.sourceTable.toLowerCase(), // 转换为小写
-        // 设置其他默认值
-        status: 1, // 已上线
-        isPartitioned: true,
-        partitionExpr: "trunc(create_time, 'year')", // 默认使用按年分区
-        description: `从业务表 ${importData.sourceDb.toLowerCase()}.${importData.sourceTable.toLowerCase()} 导入`,
-        // 使用导入数据中的hoodie配置
-        hoodieConfig: hoodieConfigToUse,
-      };
-      
-      console.log('设置表单字段值:', formValues);
-      form.setFieldsValue(formValues);
-      
-      // 使用setTimeout确保表单渲染完成后再次设置，防止时机问题
-      setTimeout(() => {
-        console.log('延时设置表单字段值（确保渲染完成）');
-        form.setFieldsValue({
-          schema: schemaToUse,
-          hoodieConfig: hoodieConfigToUse,
-        });
-        
-        // 验证表单字段是否正确设置
-        const currentValues = form.getFieldsValue(['schema', 'hoodieConfig']);
-        console.log('延时设置后的表单值检查:', currentValues);
-      }, 100);
-    }
-  }, [visible, importData, form]);
-
-  // 当没有导入数据时，重置表单并获取默认配置
-  useEffect(() => {
-    if (visible && !importData) {
+    if (visible) {
       form.resetFields();
       setActiveTab('basic');
-      setIsPartitioned(true);
       setSchemaEditMode('text');
       setSchemaValue('');
       setSchemaFields([]);
@@ -243,12 +147,57 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
       
       // 获取默认Hoodie配置
       getDefaultConfig();
-    }
-  }, [visible, importData, form]);
 
-  // 当没有导入数据但有schema或hoodie配置时，初始化可视化数据
+      // 预填充初始数据
+      if (initialData) {
+        form.setFieldsValue({
+          id: initialData.id,
+          status: initialData.status || TableStatus.OFFLINE,
+          dbType: initialData.dbType || 'tdsql',
+          sourceDb: initialData.sourceDb,
+          sourceTable: initialData.sourceTable,
+          partitionExpr: initialData.partitionExpr || "trunc(create_time, 'year')",
+          isPartitioned: initialData.isPartitioned !== undefined ? initialData.isPartitioned : true,
+          description: initialData.description,
+          tags: initialData.tags,
+        });
+
+        // 预填充schema
+        if (initialData.schema) {
+          try {
+            const parsedSchema = JSON.parse(initialData.schema);
+            if (parsedSchema.type === 'struct' && parsedSchema.fields) {
+              const fields = parseTableSchema(initialData.schema);
+              setSchemaFields(fields);
+              setSchemaValue(JSON.stringify(parsedSchema, null, 2));
+            } else {
+              setSchemaValue(initialData.schema);
+            }
+          } catch (error) {
+            console.error('解析初始schema失败:', error);
+            setSchemaValue(initialData.schema);
+          }
+        }
+
+        // 预填充hoodieConfig
+        if (initialData.hoodieConfig) {
+          try {
+            const parsedConfig = JSON.parse(initialData.hoodieConfig);
+            setHoodieConfigValue(JSON.stringify(parsedConfig, null, 2));
+            const fields = parseHoodieConfig(initialData.hoodieConfig);
+            setHoodieConfigFields(fields);
+          } catch (error) {
+            console.error('解析初始hoodieConfig失败:', error);
+            setHoodieConfigValue(initialData.hoodieConfig);
+          }
+        }
+      }
+    }
+  }, [visible, form]);
+
+  // 当有schema或hoodie配置时，初始化可视化数据
   useEffect(() => {
-    if (visible && !importData) {
+    if (visible) {
       // 如果有schema值，解析为可视化字段
       if (schemaValue) {
         const fields = parseTableSchema(schemaValue);
@@ -261,11 +210,11 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         setHoodieConfigFields(hoodieFields);
       }
     }
-  }, [visible, importData, schemaValue, hoodieConfigValue]);
+  }, [visible, schemaValue, hoodieConfigValue]);
 
-  // 当有导入数据且字段数据已设置时，确保表单字段始终同步（兜底机制）
+  // 当字段数据已设置时，确保表单字段始终同步（兜底机制）
   useEffect(() => {
-    if (visible && importData) {
+    if (visible) {
       // 检查schema字段
       if (schemaFields.length > 0) {
         const schemaJson = fieldsToSchema(schemaFields);
@@ -286,7 +235,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         }
       }
     }
-  }, [visible, importData, schemaFields, hoodieConfigFields, form]);
+  }, [visible, schemaFields, hoodieConfigFields, form]);
 
   // 解析表结构 JSON
   const parseTableSchema = (schema: string) => {
@@ -1133,22 +1082,6 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         }
       }
       
-      // 终极兜底机制：如果导入数据存在且表单字段仍然为空，直接使用导入数据
-      if (importData) {
-        const finalFormValues = form.getFieldsValue();
-        console.log('检查终极兜底机制，当前表单值:', finalFormValues);
-        
-        if (!finalFormValues.schema && importData.schema) {
-          console.log('终极兜底：使用importData的schema');
-          form.setFieldsValue({ schema: importData.schema });
-        }
-        
-        if (!finalFormValues.hoodieConfig && importData.hoodieConfig) {
-          console.log('终极兜底：使用importData的hoodieConfig');
-          form.setFieldsValue({ hoodieConfig: importData.hoodieConfig });
-        }
-      }
-      
       console.log('强制设置后的表单值:', form.getFieldsValue());
       
       const values = await form.validateFields();
@@ -1221,7 +1154,6 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
         onOk: () => {
           form.resetFields();
           setActiveTab('basic');
-          setIsPartitioned(true);
           setSchemaEditMode('text');
           setSchemaValue('');
           setSchemaFields([]);
@@ -1239,7 +1171,6 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     } else {
       form.resetFields();
       setActiveTab('basic');
-      setIsPartitioned(true);
       setSchemaEditMode('text');
       setSchemaValue('');
       setSchemaFields([]);
@@ -1479,12 +1410,19 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
             name="isPartitioned"
             valuePropName="checked"
           >
-            <Switch
-              checked={isPartitioned}
-              onChange={(checked) => setIsPartitioned(checked)}
-              checkedChildren="是"
-              unCheckedChildren="否"
-            />
+            <div style={{ 
+              padding: '4px 11px', 
+              border: '1px solid #d9d9d9', 
+              borderRadius: '6px',
+              backgroundColor: '#f6ffed',
+              color: '#52c41a',
+              display: 'inline-flex',
+              alignItems: 'center',
+              fontSize: '14px'
+            }}>
+              <CheckCircleOutlined style={{ marginRight: '8px' }} />
+              是
+            </div>
           </Form.Item>
         </Col>
         <Col span={12}>

@@ -6,7 +6,7 @@ import {
   DashboardOutlined,
   SettingOutlined,
   UserOutlined,
-  FileTextOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import dayjs from 'dayjs';
@@ -14,8 +14,8 @@ import 'dayjs/locale/zh-cn';
 import TableManagement from '@pages/TableManagement';
 import Dashboard from '@pages/Dashboard';
 import Settings from '@pages/Settings';
-import MetadataManagement from '@pages/MetadataManagement';
 import DbServerManagement from '@pages/DbServerManagement';
+import ApplicationManagement from '@pages/ApplicationManagement';
 import './App.css';
 
 const { Header, Content, Sider } = Layout;
@@ -78,16 +78,16 @@ const MainLayout: React.FC = () => {
       path: '/tables',
     },
     {
+      key: 'applications',
+      icon: <AppstoreOutlined />,
+      label: '应用程序管理',
+      path: '/applications',
+    },
+    {
       key: 'db-servers',
       icon: <DatabaseOutlined />,
       label: '业务数据源',
       path: '/db-servers',
-    },
-    {
-      key: 'metadata',
-      icon: <FileTextOutlined />,
-      label: '元数据管理',
-      path: '/metadata',
     },
     {
       key: 'settings',
@@ -183,8 +183,8 @@ const MainLayout: React.FC = () => {
             <Route path="/" element={<Navigate to="/tables" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tables" element={<TableManagement />} />
+            <Route path="/applications" element={<ApplicationManagement />} />
             <Route path="/db-servers" element={<DbServerManagement />} />
-            <Route path="/metadata" element={<MetadataManagement />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/tables" replace />} />
           </Routes>

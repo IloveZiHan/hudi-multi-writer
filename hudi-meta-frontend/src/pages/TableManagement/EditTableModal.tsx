@@ -881,70 +881,190 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
   // 当modal打开时，初始化表单数据
   useEffect(() => {
     if (visible && record) {
+      console.log('EditTableModal 初始化，接收到的record:', record);
+      
       // 重置已访问的选项卡状态
       setActiveTab('basic');
       setVisitedTabs(new Set(['basic'])); // 确保basic被访问
       
+      // 验证并规范化数据库类型
+      const normalizeDbType = (sourceDb?: string) => {
+        const dbName = sourceDb?.toLowerCase() || '';
+        if (dbName.includes('mysql') || dbName.includes('tdsql')) return 'mysql';
+        if (dbName.includes('oracle')) return 'oracle';
+        if (dbName.includes('埋点')) return '埋点';
+        return 'mysql'; // 默认类型
+      };
+      
       const values = {
         status: record.status,
-        dbType: 'mysql', // 默认数据库类型，因为MetaTableDTO中没有此字段
-        sourceDb: record.sourceDb,
-        sourceTable: record.sourceTable,
-        isPartitioned: record.isPartitioned,
+        dbType: normalizeDbType(record.sourceDb), // 根据源数据库智能推断数据库类型
+        sourceDb: record.sourceDb?.toLowerCase() || '',
+        sourceTable: record.sourceTable?.toLowerCase() || '',
+        isPartitioned: record.isPartitioned || false,
         partitionExpr: record.partitionExpr || "trunc(create_time, 'year')", // 默认使用按年分区
-        tags: record.tags,
-        description: record.description,
-        schema: record.schema,
+        tags: record.tags || '从业务系统导入',
+        description: record.description || `从业务表导入的Hudi表 (${record.id})`,
+        schema: record.schema || '',
         hoodieConfig: record.hoodieConfig || '{}', // 添加hoodie配置
       };
       
+      console.log('设置表单初始值:', values);
       form.setFieldsValue(values);
       setInitialValues(values); // 保存初始值
-      setIsPartitioned(record.isPartitioned || false);
-      setSchemaValue(record.schema || '');
-      setHoodieConfigValue(record.hoodieConfig || '{}');
+      setIsPartitioned(values.isPartitioned);
       
-      // 解析表结构并将字段名转换为小写，确保包含nullable字段
+      // 解析并规范化Schema
       let schemaToUse = record.schema || '';
       if (schemaToUse) {
         try {
-          const parsedSchema = JSON.parse(schemaToUse);
+          // 检查是否已经是有效的JSON格式
+          let parsedSchema;
+          if (schemaToUse.startsWith('{')) {
+            parsedSchema = JSON.parse(schemaToUse);
+          } else {
+            // 如果不是JSON格式，尝试创建一个基础的schema结构
+            console.warn('Schema不是有效的JSON格式，创建基础结构:', schemaToUse);
+            parsedSchema = {
+              type: 'struct',
+              fields: [
+                {
+                  metadata: {},
+                  name: 'id',
+                  nullable: false,
+                  type: 'string'
+                }
+              ]
+            };
+          }
+          
           if (parsedSchema.type === 'struct' && parsedSchema.fields) {
+            // 规范化字段信息
             parsedSchema.fields = parsedSchema.fields.map((field: any) => ({
-              ...field,
+              metadata: field.metadata || (field.comment ? { comment: field.comment } : {}),
               name: field.name ? field.name.toLowerCase() : '',
-              nullable: field.nullable !== undefined ? field.nullable : true, // 确保nullable字段存在，默认为true
+              nullable: field.nullable !== undefined ? field.nullable : true,
+              type: field.type || 'string',
             }));
-            schemaToUse = JSON.stringify(parsedSchema);
+            
+            schemaToUse = JSON.stringify(parsedSchema, null, 2);
             setSchemaValue(schemaToUse);
             form.setFieldsValue({ schema: schemaToUse });
+            console.log('规范化后的schema:', schemaToUse);
           }
         } catch (error) {
           console.error('解析schema失败:', error);
+          // 创建一个默认的schema结构
+          const defaultSchema = {
+            type: 'struct',
+            fields: [
+              {
+                metadata: {},
+                name: 'id',
+                nullable: false,
+                type: 'string'
+              }
+            ]
+          };
+          schemaToUse = JSON.stringify(defaultSchema, null, 2);
+          setSchemaValue(schemaToUse);
+          form.setFieldsValue({ schema: schemaToUse });
+          message.warning('原始schema格式有误，已创建默认结构，请手动调整');
         }
+      } else {
+        // 如果没有schema，创建一个基本的默认结构
+        const defaultSchema = {
+          type: 'struct',
+          fields: [
+            {
+              metadata: {},
+              name: 'id',
+              nullable: false,
+              type: 'string'
+            }
+          ]
+        };
+        schemaToUse = JSON.stringify(defaultSchema, null, 2);
+        setSchemaValue(schemaToUse);
+        form.setFieldsValue({ schema: schemaToUse });
+        console.log('创建默认schema结构');
       }
       
       const fields = parseTableSchema(schemaToUse);
       setSchemaFields(fields);
       
-      // 解析Hoodie配置，并自动设置hoodie.table.name
+      // 初始化Hoodie配置，并自动设置关键参数
       let hoodieConfigToUse = record.hoodieConfig || '{}';
       try {
         const parsedHoodieConfig = JSON.parse(hoodieConfigToUse);
-        // 自动设置hoodie.table.name为表ID
+        
+        // 自动设置hoodie.table.name为表ID（小写）
         parsedHoodieConfig['hoodie.table.name'] = record.id.toLowerCase();
+        
+        // 自动设置主键字段（基于schema中的字段）
+        const primaryKeyFields = getPrimaryKeyFieldsFromSchema(fields);
+        if (primaryKeyFields.length > 0) {
+          const primaryKeysStr = primaryKeyFields.join(',');
+          parsedHoodieConfig['hoodie.table.recordkey.fields'] = primaryKeysStr;
+          parsedHoodieConfig['hoodie.datasource.write.recordkey.field'] = primaryKeysStr;
+          parsedHoodieConfig['hoodie.bucket.index.hash.field'] = primaryKeysStr;
+          console.log('自动设置主键字段:', primaryKeysStr);
+        }
+        
+        // 设置一些常用的默认配置
+        if (!parsedHoodieConfig['hoodie.table.type']) {
+          parsedHoodieConfig['hoodie.table.type'] = 'COPY_ON_WRITE';
+        }
+        if (!parsedHoodieConfig['hoodie.datasource.write.operation']) {
+          parsedHoodieConfig['hoodie.datasource.write.operation'] = 'upsert';
+        }
+        
         hoodieConfigToUse = JSON.stringify(parsedHoodieConfig, null, 2);
         setHoodieConfigValue(hoodieConfigToUse);
         form.setFieldsValue({ hoodieConfig: hoodieConfigToUse });
-        console.log('自动设置初始化时的hoodie.table.name为:', record.id.toLowerCase());
+        console.log('自动配置的Hoodie参数:', parsedHoodieConfig);
       } catch (error) {
-        console.error('解析并设置hoodie.table.name失败:', error);
+        console.error('解析并设置Hoodie配置失败:', error);
+        // 设置基础的Hoodie配置
+        const basicConfig = {
+          'hoodie.table.name': record.id.toLowerCase(),
+          'hoodie.table.type': 'COPY_ON_WRITE',
+          'hoodie.datasource.write.operation': 'upsert'
+        };
+        hoodieConfigToUse = JSON.stringify(basicConfig, null, 2);
+        setHoodieConfigValue(hoodieConfigToUse);
+        form.setFieldsValue({ hoodieConfig: hoodieConfigToUse });
       }
       
       const hoodieFields = parseHoodieConfig(hoodieConfigToUse);
       setHoodieConfigFields(hoodieFields);
+      
+      console.log('EditTableModal 初始化完成');
     }
   }, [visible, record, form]);
+
+  // 从schema字段中获取主键字段
+  const getPrimaryKeyFieldsFromSchema = (fields: any[]): string[] => {
+    const primaryKeyFields: string[] = [];
+    
+    fields.forEach(field => {
+      if (field.name && (
+        field.name.toLowerCase() === 'id' ||
+        field.name.toLowerCase().includes('key') ||
+        field.name.toLowerCase().includes('primary') ||
+        !field.nullable // 非空字段可能是主键
+      )) {
+        primaryKeyFields.push(field.name.toLowerCase());
+      }
+    });
+    
+    // 如果没有找到明确的主键字段，使用第一个字段作为主键
+    if (primaryKeyFields.length === 0 && fields.length > 0 && fields[0].name) {
+      primaryKeyFields.push(fields[0].name.toLowerCase());
+    }
+    
+    return [...new Set(primaryKeyFields)]; // 去重
+  };
 
   // 处理表单提交
   const handleSubmit = async () => {
