@@ -27,6 +27,7 @@ import { useRequest } from 'ahooks';
 import tableApiService from '@services/tableApi';
 import hoodieConfigApiService from '@services/hoodieConfigApi';
 import { CreateTableRequest, TableStatus, SupportedDbTypes } from '../../types/api';
+import { generateTableId, getAvailableDatabases } from '../../config/databaseMapping';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -416,6 +417,20 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
     const configJson = fieldsToHoodieConfig(fields);
     setHoodieConfigValue(configJson);
     form.setFieldsValue({ hoodieConfig: configJson });
+  };
+
+  // 自动生成表ID
+  const autoGenerateTableId = () => {
+    const sourceDb = form.getFieldValue('sourceDb');
+    const sourceTable = form.getFieldValue('sourceTable');
+    
+    if (sourceDb && sourceTable) {
+      const generatedTableId = generateTableId(sourceDb, sourceTable);
+      form.setFieldsValue({ id: generatedTableId });
+      // 自动更新hoodie.table.name
+      handleTableIdChange(generatedTableId);
+      console.log('自动生成表ID:', generatedTableId);
+    }
   };
 
   // 处理表ID变化时自动更新hoodie.table.name
@@ -1323,7 +1338,7 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
             ]}
           >
             <Input 
-              placeholder="请输入表ID" 
+              placeholder="请输入表ID或自动生成" 
               onChange={(e) => {
                 const value = e.target.value.toLowerCase(); // 自动转换为小写
                 form.setFieldsValue({ id: value });
@@ -1375,11 +1390,14 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
             name="sourceDb"
             rules={[{ required: true, message: '请输入源数据库' }]}
           >
-            <Input 
+            <AutoComplete
               placeholder="请输入源数据库名称" 
-              onChange={(e) => {
-                const value = e.target.value.toLowerCase(); // 自动转换为小写
-                form.setFieldsValue({ sourceDb: value });
+              options={getAvailableDatabases().map(db => ({ label: db, value: db }))}
+              onChange={(value) => {
+                const normalizedValue = value.toLowerCase(); // 自动转换为小写
+                form.setFieldsValue({ sourceDb: normalizedValue });
+                // 自动生成表ID
+                autoGenerateTableId();
               }}
             />
           </Form.Item>
@@ -1395,6 +1413,8 @@ const CreateTableModal: React.FC<CreateTableModalProps> = ({
               onChange={(e) => {
                 const value = e.target.value.toLowerCase(); // 自动转换为小写
                 form.setFieldsValue({ sourceTable: value });
+                // 自动生成表ID
+                autoGenerateTableId();
               }}
             />
           </Form.Item>

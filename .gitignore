@@ -31,3 +31,8 @@ replay_pid*
 /hudi-meta-frontend/node_modules/
 /.idea/
 /logs/
+/spark-hudi-multi-writer/src/main/resources/tdsql_data_ogg.json
+/spark-hudi-multi-writer/src/main/resources/ogg_data.json
+/spark-hudi-multi-writer/src/test/java/cn/com/multi_writer/OggDataKafkaProducerTest.java
+/spark-hudi-multi-writer/src/main/resources/canal_data.json
+/hudi-meta-web/src/main/resources/idno_dbname_mapping.conf

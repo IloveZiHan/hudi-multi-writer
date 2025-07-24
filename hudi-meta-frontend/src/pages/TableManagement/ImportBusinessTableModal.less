@@ -1,0 +1,219 @@
+.import-business-table-modal {
+  .ant-steps {
+    margin-bottom: 24px;
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 8px 16px;
+  }
+
+  .ant-card-head {
+    padding: 0 16px;
+    min-height: 40px;
+  }
+
+  .ant-card-body {
+    padding: 16px;
+  }
+
+  // 表单严格左对齐样式
+  .ant-form {
+    text-align: left;
+
+    .ant-form-item {
+      text-align: left;
+      margin-bottom: 24px;
+      
+      .ant-form-item-label {
+        text-align: left;
+        padding-bottom: 8px;
+        
+        > label {
+          text-align: left;
+          font-weight: 500;
+        }
+      }
+      
+      .ant-form-item-control {
+        text-align: left;
+        
+        .ant-select {
+          text-align: left;
+          
+          .ant-select-selector {
+            text-align: left;
+            
+            .ant-select-selection-placeholder {
+              text-align: left;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 下拉菜单左对齐
+  .ant-select-dropdown {
+    text-align: left;
+    
+    .ant-select-item {
+      text-align: left;
+    }
+  }
+
+  // 数据库选择行样式
+  .db-selection-row {
+    margin-bottom: 12px;
+    
+    // 确保数据库服务器列始终在第一位
+    .db-server-col {
+      // 在移动端确保优先显示
+      @media (max-width: 768px) {
+        order: 1 !important;
+        margin-bottom: 16px;
+        
+        .ant-form-item-label {
+          font-weight: 600;
+          color: #1890ff;
+          
+          &::after {
+            content: " (必选)";
+            color: #ff4d4f;
+            font-size: 12px;
+          }
+        }
+      }
+    }
+    
+    .database-col {
+      @media (max-width: 768px) {
+        order: 2 !important;
+        margin-bottom: 16px;
+      }
+    }
+    
+    // 中等屏幕以上确保水平排列
+    @media (min-width: 769px) {
+      .db-server-col,
+      .database-col {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  // 统计信息行样式
+  .stats-row {
+    margin-bottom: 16px;
+    padding: 8px 0;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    
+    .table-selection-stats {
+      text-align: center;
+      padding: 4px 16px;
+      
+      .ant-typography {
+        margin: 0;
+        font-size: 14px;
+        color: #666;
+        font-weight: 500;
+        
+        // 高亮统计数字
+        &::before {
+          content: "📊 ";
+          margin-right: 4px;
+        }
+      }
+    }
+    
+    // 移动端样式优化
+    @media (max-width: 768px) {
+      margin: 12px 0 16px 0;
+      
+      .table-selection-stats {
+        padding: 6px 12px;
+        
+        .ant-typography {
+          font-size: 13px;
+        }
+      }
+    }
+  }
+
+  .preview-card {
+    .ant-typography {
+      margin-bottom: 8px;
+    }
+  }
+
+  .schema-preview {
+    font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    background: #f6f6f6;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    padding: 16px;
+    max-height: 200px;
+    overflow: auto;
+  }
+
+  .data-preview {
+    font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    background: #f6f6f6;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    padding: 16px;
+    max-height: 200px;
+    overflow: auto;
+    white-space: pre-wrap;
+  }
+
+  .selected-table-input {
+    .ant-input {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+  }
+
+  .import-summary {
+    ul {
+      margin: 0;
+      padding-left: 20px;
+      
+      li {
+        margin-bottom: 4px;
+        color: #666;
+        font-size: 14px;
+      }
+    }
+  }
+
+  .table-selection-stats {
+    color: #666;
+    font-size: 13px;
+  }
+
+  // 优化移动端显示
+  @media (max-width: 576px) {
+    .ant-modal {
+      max-width: 95vw;
+      margin: 10px;
+    }
+    
+    .db-selection-row {
+      .ant-col {
+        padding: 0 8px;
+      }
+      
+      .ant-form-item {
+        margin-bottom: 16px;
+      }
+    }
+    
+    .stats-row {
+      margin: 8px 0 12px 0;
+    }
+  }
+} 

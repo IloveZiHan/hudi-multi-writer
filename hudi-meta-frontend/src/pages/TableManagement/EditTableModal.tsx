@@ -27,6 +27,7 @@ import { useRequest } from 'ahooks';
 import tableApiService from '@services/tableApi';
 import hoodieConfigApiService from '@services/hoodieConfigApi';
 import { UpdateTableRequest, TableStatus, MetaTableDTO } from '../../types/api';
+import { generateTableId, getAvailableDatabases } from '../../config/databaseMapping';
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -294,6 +295,59 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
     const configJson = fieldsToHoodieConfig(fields);
     setHoodieConfigValue(configJson);
     form.setFieldsValue({ hoodieConfig: configJson });
+  };
+
+  // 自动生成表ID
+  const autoGenerateTableId = () => {
+    const sourceDb = form.getFieldValue('sourceDb');
+    const sourceTable = form.getFieldValue('sourceTable');
+    
+    if (sourceDb && sourceTable) {
+      const generatedTableId = generateTableId(sourceDb, sourceTable);
+      form.setFieldsValue({ id: generatedTableId });
+      // 自动更新hoodie.table.name
+      handleTableIdChange(generatedTableId);
+      console.log('自动生成表ID:', generatedTableId);
+    }
+  };
+
+  // 处理表ID变化时自动更新hoodie.table.name
+  const handleTableIdChange = (tableId: string) => {
+    if (!tableId) return;
+    
+    const lowercaseTableId = tableId.toLowerCase();
+    
+    // 更新hoodie配置中的hoodie.table.name
+    if (hoodieConfigEditMode === 'visual' && hoodieConfigFields.length > 0) {
+      const updatedFields = hoodieConfigFields.map(field => {
+        if (field.configKey === 'hoodie.table.name') {
+          return { ...field, configValue: lowercaseTableId };
+        }
+        return field;
+      });
+      
+      // 如果没有找到hoodie.table.name配置，则添加一个
+      const hasTableName = updatedFields.some(field => field.configKey === 'hoodie.table.name');
+      if (!hasTableName) {
+        updatedFields.push({
+          key: Date.now().toString(),
+          configKey: 'hoodie.table.name',
+          configValue: lowercaseTableId,
+        });
+      }
+      
+      updateHoodieConfigFields(updatedFields);
+    } else if (hoodieConfigEditMode === 'text' && hoodieConfigValue) {
+      try {
+        const parsedConfig = JSON.parse(hoodieConfigValue);
+        parsedConfig['hoodie.table.name'] = lowercaseTableId;
+        const updatedConfigValue = JSON.stringify(parsedConfig, null, 2);
+        setHoodieConfigValue(updatedConfigValue);
+        form.setFieldsValue({ hoodieConfig: updatedConfigValue });
+      } catch (error) {
+        console.error('更新hoodie.table.name失败:', error);
+      }
+    }
   };
 
   // 添加新字段
@@ -1204,8 +1258,23 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
       
       <Row gutter={16}>
         <Col span={12}>
-          <Form.Item label="表ID">
-            <Input value={record?.id} disabled />
+          <Form.Item 
+            label="表ID"
+            name="id"
+            rules={[
+              { required: true, message: '请输入表ID' },
+              { pattern: /^[a-zA-Z][a-zA-Z0-9_]*$/, message: '表ID必须以字母开头，只能包含字母、数字和下划线' },
+            ]}
+          >
+            <Input 
+              placeholder="请输入表ID或自动生成" 
+              onChange={(e) => {
+                const value = e.target.value.toLowerCase(); // 自动转换为小写
+                form.setFieldsValue({ id: value });
+                // 自动更新hoodie.table.name
+                handleTableIdChange(value);
+              }}
+            />
           </Form.Item>
         </Col>
         <Col span={12}>
@@ -1250,11 +1319,14 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
             name="sourceDb"
             rules={[{ required: true, message: '请输入源数据库' }]}
           >
-            <Input 
+            <AutoComplete
               placeholder="请输入源数据库名称" 
-              onChange={(e) => {
-                const value = e.target.value.toLowerCase(); // 自动转换为小写
-                form.setFieldsValue({ sourceDb: value });
+              options={getAvailableDatabases().map(db => ({ label: db, value: db }))}
+              onChange={(value) => {
+                const normalizedValue = value.toLowerCase(); // 自动转换为小写
+                form.setFieldsValue({ sourceDb: normalizedValue });
+                // 自动生成表ID
+                autoGenerateTableId();
               }}
             />
           </Form.Item>
@@ -1270,6 +1342,8 @@ const EditTableModal: React.FC<EditTableModalProps> = ({
               onChange={(e) => {
                 const value = e.target.value.toLowerCase(); // 自动转换为小写
                 form.setFieldsValue({ sourceTable: value });
+                // 自动生成表ID
+                autoGenerateTableId();
               }}
             />
           </Form.Item>

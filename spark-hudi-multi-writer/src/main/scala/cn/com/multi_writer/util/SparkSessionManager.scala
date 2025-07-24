@@ -50,46 +50,8 @@ object SparkSessionManager {
     }
   }
 
-  /**
-   * 根据当前执行的主类名称获取对应的应用程序名称
-   * @return 对应的应用程序名称
-   */
-  private def getApplicationNameByMainClass(): String = {
-    try {
-      // 获取当前线程的堆栈信息
-      val stackTrace = Thread.currentThread().getStackTrace()
-      
-      // 查找main方法所在的类
-      val mainClassOption = stackTrace.find(_.getMethodName == "main")
-        .map(_.getClassName)
-      
-      mainClassOption match {
-        case Some(className) if className.contains("OggCdcStreamJob") =>
-          logger.info(s"检测到主类: $className，设置应用程序名称为: spark-hudi-cdc-oracle-stream-job")
-          "spark-hudi-cdc-oracle-stream-job"
-        case Some(className) if className.contains("TdsqlCdcStreamJob") =>
-          logger.info(s"检测到主类: $className，设置应用程序名称为: spark-hudi-tdsql-stream-job")
-          "spark-hudi-tdsql-stream-job"
-        case Some(className) if className.contains("CanalCdcStreamJob$") =>
-          logger.warn(s"未识别的主类: $className，使用默认应用程序名称: spark-hudi-cdc-canal-stream-job")
-          "spark-hudi-cdc-canal-stream-job"
-        case Some(className) if className.contains("BuriedpointCdcStreamJob") =>
-          logger.warn(s"未识别的主类: $className，使用默认应用程序名称: spark-hudi-cdc-bp-stream-job")
-          "spark-hudi-cdc-bp-stream-job"
-        case None =>
-          logger.warn("无法检测到主类，使用默认应用程序名称: spark-hudi-cdc-stream-job")
-          "spark-hudi-cdc-stream-job"
-      }
-    } catch {
-      case e: Exception =>
-        logger.error(s"检测主类时发生异常: ${e.getMessage}, 使用默认应用程序名称: spark-hudi-cdc-stream-job")
-        "spark-hudi-cdc-stream-job"
-    }
-  }
-
   // 定义系统默认配置值，用于判断用户是否修改了配置
   private val DEFAULT_CONFIGS = Map(
-    "spark.application.name" -> getApplicationNameByMainClass(), // 根据主类动态设置应用程序名称
     "spark.kafka.bootstrap.servers" -> "10.94.162.31:9092",
     "spark.kafka.topic" -> getKafkaTopicByMainClass(), // 根据主类动态设置topic
     "spark.shuffle_partition.records" -> "100000",
@@ -155,7 +117,7 @@ object SparkSessionManager {
    */
   def getStreamingConfigs(spark: SparkSession): Map[String, String] = {
     Map(
-      "applicationName" -> spark.conf.get("spark.application.name", DEFAULT_CONFIGS("spark.application.name")),
+      "applicationName" -> spark.conf.get("spark.app.name", ""),
       "kafkaBrokers" -> spark.conf.get("spark.kafka.bootstrap.servers", DEFAULT_CONFIGS("spark.kafka.bootstrap.servers")),
       "kafkaTopic" -> spark.conf.get("spark.kafka.topic", DEFAULT_CONFIGS("spark.kafka.topic")),
       "recordsPerPartition" -> spark.conf.get("spark.shuffle_partition.records", DEFAULT_CONFIGS("spark.shuffle_partition.records")),
